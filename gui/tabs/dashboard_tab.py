@@ -163,7 +163,14 @@ class DashboardTab(tk.Frame):
         self.lbl_mode_pill.config(text=mode_name)
 
         if t.sto_info and t.sto_info.is_fault:
-            self.lbl_sto_pill.config(text=f"STO: {t.sto_info.error_code_hex}", bg="#4A141A", fg=COLOR_DANGER)
+            if t.sto_info.code == 6:
+                self.lbl_sto_pill.config(text="STO TRIPPED / NO INPUT", bg="#4A141A", fg=COLOR_DANGER)
+            elif t.sto_info.code == 3:
+                self.lbl_sto_pill.config(text="STO A MISSING (0xFF1A)", bg="#4A141A", fg=COLOR_DANGER)
+            elif t.sto_info.code == 5:
+                self.lbl_sto_pill.config(text="STO B MISSING (0xFF1B)", bg="#4A141A", fg=COLOR_DANGER)
+            else:
+                self.lbl_sto_pill.config(text=f"STO FAULT: {t.sto_info.error_code_hex}", bg="#4A141A", fg=COLOR_DANGER)
         elif t.sto_active:
             self.lbl_sto_pill.config(text="STO TRIPPED", bg="#4A141A", fg=COLOR_DANGER)
         else:

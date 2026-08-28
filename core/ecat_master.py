@@ -14,7 +14,7 @@ from core.ecat_raw import (
     REG_SM0_CONFIG, REG_SM1_CONFIG,
     AL_STATE_INIT, AL_STATE_PREOP, AL_STATE_SAFEOP, AL_STATE_OP, AL_STATE_ERROR, AL_STATE_NAMES
 )
-from core.motor_device import MotorTelemetry, Cia402State, decode_cia402_state
+from core.motor_device import MotorTelemetry, Cia402State, decode_cia402_state, decode_sto_status
 from core.led_ring import LedRingConfig
 
 MBX_TYPE_COE = 0x03
@@ -54,6 +54,7 @@ class EthercatMaster:
         # State tracking for smooth velocity calculation (16-bit encoder = 65,536 inc/rev)
         self._last_pos = None
         self._last_pos_time = None
+        self._diag_poll_cnt = 0
         
         # Real Live Telemetry Object
         self.live_telemetry = MotorTelemetry(
@@ -62,6 +63,7 @@ class EthercatMaster:
             torque_actual=0,
             dc_bus_voltage_mv=0,
             temperature_c=25.0,
+            sto_code=6, # Default to Tripped until read
             sto_active=True,
             cia_state=Cia402State.SWITCH_ON_DISABLED,
             led_ctrl_dword=0
@@ -268,7 +270,7 @@ class EthercatMaster:
             # WKC=1 was accepted by SM0
             return None
 
-    def start_cyclic_pdo(self, interval_s: float = 0.05):
+    def start_cyclic_pdo(self, interval_s: float = 0.04):
         if self._pdo_running:
             return
         self._pdo_running = True
@@ -283,13 +285,14 @@ class EthercatMaster:
             self._pdo_thread = None
 
     def _pdo_loop(self):
-        """Continuous live position stream with 16-bit encoder RPM differentiation."""
+        """Continuous live telemetry stream with 16-bit encoder tracking and STO/Status diagnostics."""
         while self._pdo_running and self.is_connected and self.slaves:
             addr = self.slaves[0].configured_addr
-            
-            # Poll Position 0x6064:00
             now = time.time()
-            data, err = self.sdo_upload(addr, 0x6064, 0x00, timeout_s=0.1)
+            self._diag_poll_cnt += 1
+            
+            # 1. Primary: Poll Position 0x6064:00 every cycle for high-speed tracking
+            data, err = self.sdo_upload(addr, 0x6064, 0x00, timeout_s=0.08)
             if data and len(data) >= 4:
                 pos = struct.unpack('<i', data[:4])[0]
                 self.live_telemetry.position_actual = pos
@@ -299,11 +302,27 @@ class EthercatMaster:
                     dt = now - self._last_pos_time
                     if dt > 0.01:
                         dpos = pos - self._last_pos
-                        # 65,536 counts = 1 rev => RPM = (dpos / 65536.0) * (60.0 / dt)
                         rpm = (dpos / 65536.0) * (60.0 / dt)
                         self.live_telemetry.velocity_actual = int(round(rpm))
                 
                 self._last_pos = pos
                 self._last_pos_time = now
+
+            # 2. Interleaved: Poll Statusword (0x6041) every 6 cycles (~250ms)
+            if self._diag_poll_cnt % 6 == 0:
+                sw_data, _ = self.sdo_upload(addr, 0x6041, 0x00, timeout_s=0.08)
+                if sw_data and len(sw_data) >= 2:
+                    sw = struct.unpack('<H', sw_data[:2])[0]
+                    self.live_telemetry.statusword = sw
+                    self.live_telemetry.cia_state = decode_cia402_state(sw)
+
+            # 3. Interleaved: Poll STO Diagnostics (0x60F7:12) every 12 cycles (~500ms)
+            if self._diag_poll_cnt % 12 == 0:
+                sto_data, _ = self.sdo_upload(addr, 0x60F7, 0x12, timeout_s=0.08)
+                if sto_data:
+                    sto_val = int.from_bytes(sto_data[:2], 'little')
+                    self.live_telemetry.sto_code = sto_val
+                    self.live_telemetry.sto_info = decode_sto_status(sto_val)
+                    self.live_telemetry.sto_active = self.live_telemetry.sto_info.is_fault or (sto_val != 0)
 
             time.sleep(0.04)
