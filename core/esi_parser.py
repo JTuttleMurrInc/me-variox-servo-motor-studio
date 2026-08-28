@@ -88,10 +88,76 @@ class EsiParser:
         if self.xml_path and os.path.exists(self.xml_path):
             self.load(self.xml_path)
 
-    def load_default(self) -> Optional[EsiDeviceInfo]:
-        if not self.device_info and self.xml_path and os.path.exists(self.xml_path):
+    def load_default(self) -> EsiDeviceInfo:
+        if self.xml_path and os.path.exists(self.xml_path):
             return self.load(self.xml_path)
+        if not self.device_info:
+            self.device_info = self._build_embedded_default()
         return self.device_info
+
+    def _build_embedded_default(self) -> EsiDeviceInfo:
+        """Built-in default standard Vario-X dictionary for standalone operation without external XML."""
+        info = EsiDeviceInfo(
+            name="Vario-X Motor Drive",
+            vendor_id=0x000005D5,
+            product_code=0x00B85381,
+            revision_no=0x00000001,
+            order_number="MD60-1-4000-F0S16M16-01",
+            description="Murrelektronik Vario-X Integrated Servo Motor"
+        )
+        
+        objects_def = [
+            (0x1000, "Device Type", "UNSIGNED32", 32, "ro", "Communication / Identity"),
+            (0x1008, "Manufacturer Device Name", "VISIBLE_STRING", 32, "ro", "Communication / Identity"),
+            (0x1009, "Manufacturer Hardware Version", "VISIBLE_STRING", 32, "ro", "Communication / Identity"),
+            (0x100A, "Manufacturer Software Version", "VISIBLE_STRING", 32, "ro", "Communication / Identity"),
+            (0x1018, "Identity Object", "RECORD", 32, "ro", "Communication / Identity"),
+            (0x2FEF, "LED Ring Control / Status", "RECORD", 32, "rw", "LED Ring Control (0x2FEF)"),
+            (0x6040, "Controlword", "UNSIGNED16", 16, "rw", "CiA 402 Core Motion"),
+            (0x6041, "Statusword", "UNSIGNED16", 16, "ro", "CiA 402 Core Motion"),
+            (0x6060, "Modes of Operation", "INTEGER8", 8, "rw", "CiA 402 Core Motion"),
+            (0x6061, "Modes of Operation Display", "INTEGER8", 8, "ro", "CiA 402 Core Motion"),
+            (0x6064, "Position Actual Value", "INTEGER32", 32, "ro", "CiA 402 Core Motion"),
+            (0x606C, "Velocity Actual Value", "INTEGER32", 32, "ro", "CiA 402 Core Motion"),
+            (0x6077, "Torque Actual Value", "INTEGER16", 16, "ro", "CiA 402 Core Motion"),
+            (0x6079, "DC Link Circuit Voltage", "UNSIGNED32", 32, "ro", "CiA 402 Core Motion"),
+            (0x607A, "Target Position", "INTEGER32", 32, "rw", "CiA 402 Core Motion"),
+            (0x6081, "Profile Velocity", "UNSIGNED32", 32, "rw", "CiA 402 Drive Profile"),
+            (0x6083, "Profile Acceleration", "UNSIGNED32", 32, "rw", "CiA 402 Drive Profile"),
+            (0x6084, "Profile Deceleration", "UNSIGNED32", 32, "rw", "CiA 402 Drive Profile"),
+            (0x6085, "Quick Stop Deceleration", "UNSIGNED32", 32, "rw", "CiA 402 Drive Profile"),
+            (0x608F, "Position Encoder Resolution", "RECORD", 32, "ro", "CiA 402 Drive Profile"),
+            (0x60FF, "Target Velocity", "INTEGER32", 32, "rw", "CiA 402 Core Motion"),
+            (0x60F7, "Manufacturer Diagnostics", "RECORD", 32, "ro", "Manufacturer Specific"),
+        ]
+
+        for idx, name, dtype, bits, access, cat in objects_def:
+            obj = EsiObject(
+                index=idx,
+                hex_index=f"0x{idx:04X}",
+                name=name,
+                data_type=dtype,
+                bit_size=bits,
+                access=access,
+                category=cat
+            )
+            if idx == 0x2FEF:
+                obj.sub_items[0x01] = EsiSubItem(0x01, "LED_CTRL", "UNSIGNED32", 32, "rw")
+                obj.sub_items[0x02] = EsiSubItem(0x02, "LED_Status", "UNSIGNED32", 32, "ro")
+            elif idx == 0x1018:
+                obj.sub_items[0x01] = EsiSubItem(0x01, "Vendor ID", "UNSIGNED32", 32, "ro")
+                obj.sub_items[0x02] = EsiSubItem(0x02, "Product Code", "UNSIGNED32", 32, "ro")
+                obj.sub_items[0x03] = EsiSubItem(0x03, "Revision Number", "UNSIGNED32", 32, "ro")
+                obj.sub_items[0x04] = EsiSubItem(0x04, "Serial Number", "UNSIGNED32", 32, "ro")
+            elif idx == 0x608F:
+                obj.sub_items[0x01] = EsiSubItem(0x01, "Encoder Increments", "UNSIGNED32", 32, "ro")
+                obj.sub_items[0x02] = EsiSubItem(0x02, "Motor Revolutions", "UNSIGNED32", 32, "ro")
+            elif idx == 0x60F7:
+                obj.sub_items[0x11] = EsiSubItem(0x11, "Internal Temperature", "UNSIGNED16", 16, "ro")
+                obj.sub_items[0x17] = EsiSubItem(0x17, "Safe Torque Off (STO) State", "UNSIGNED16", 16, "ro")
+            info.objects[idx] = obj
+
+        return info
 
     @staticmethod
     def _find_default_esi() -> Optional[str]:
