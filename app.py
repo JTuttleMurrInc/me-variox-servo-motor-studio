@@ -10,6 +10,15 @@ import tkinter as tk
 from tkinter import ttk, messagebox
 from typing import Optional, Tuple, Dict, Any
 
+# Windows Taskbar custom icon hook
+if sys.platform == "win32":
+    try:
+        import ctypes
+        APP_USER_MODEL_ID = "murrelektronik.variox.motorstudio.v1"
+        ctypes.windll.shell32.SetCurrentProcessExplicitAppUserModelID(APP_USER_MODEL_ID)
+    except Exception:
+        pass
+
 from core.esi_parser import EsiParser
 from core.simulation import VirtualMotorDrive
 from core.motor_device import (
@@ -94,17 +103,25 @@ class VarioXMotorStudioApp:
         self._schedule_telemetry_tick()
 
     def _setup_window_icon(self):
-        icon_ico = os.path.join(os.path.dirname(__file__), "assets", "app_icon.ico")
-        icon_png = os.path.join(os.path.dirname(__file__), "assets", "app_icon.png")
+        icon_ico = os.path.abspath(os.path.join(os.path.dirname(__file__), "assets", "app_icon.ico"))
+        icon_png = os.path.abspath(os.path.join(os.path.dirname(__file__), "assets", "app_icon.png"))
+        
+        # 1. Native Windows Icon Bitmap (Sets taskbar + titlebar)
         if os.path.exists(icon_ico):
             try:
-                self.root.iconbitmap(icon_ico)
+                self.root.iconbitmap(default=icon_ico)
             except Exception:
-                pass
+                try:
+                    self.root.wm_iconbitmap(icon_ico)
+                except Exception:
+                    pass
+        
+        # 2. Modern High-DPI iconphoto
         if os.path.exists(icon_png):
             try:
                 from PIL import ImageTk, Image
-                self._app_icon_img = ImageTk.PhotoImage(Image.open(icon_png).resize((64, 64), Image.Resampling.LANCZOS))
+                pil_img = Image.open(icon_png)
+                self._app_icon_img = ImageTk.PhotoImage(pil_img)
                 self.root.iconphoto(True, self._app_icon_img)
             except Exception:
                 pass
