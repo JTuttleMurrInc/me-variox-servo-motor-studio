@@ -41,19 +41,27 @@ An industrial diagnostic workbench, real-time telemetry dashboard, and optical L
 
 ---
 
-### 4. CANopen SDO Object Explorer *(⚠️ Untested on Live Hardware)*
-> Complete tree of 140+ ESI objects with real-time SDO Upload (read) and SDO Download (write) parameter editors.  
-> **Note:** *This section is currently implemented & simulated, but untested on live hardware.*
+### 4. Servo Loop Tuning & Kinematics Studio (Section 8.2.1)
+> Interactive PID gain tuning ($K_{vp}, K_{vi}$), velocity loop bandwidth ($F_{bw}$ in Hz), feedback & output filter synthesis, kinematic profile shaping, and one-click SDO batch flashing.
 <p align="center">
-  <img src="docs/screenshots/04_sdo_explorer.png" width="95%" alt="SDO Object Explorer (Untested)" />
+  <img src="docs/screenshots/04_servo_tuning.png" width="95%" alt="Servo Loop Tuning & Kinematics" />
 </p>
 
 ---
 
-### 5. Master & Bus Diagnostics
+### 5. CANopen SDO Object Explorer *(⚠️ Untested on Live Hardware)*
+> Complete tree of 140+ ESI objects with real-time SDO Upload (read) and SDO Download (write) parameter editors.  
+> **Note:** *This section is currently implemented & simulated, but untested on live hardware.*
+<p align="center">
+  <img src="docs/screenshots/05_sdo_explorer.png" width="95%" alt="SDO Object Explorer (Untested)" />
+</p>
+
+---
+
+### 6. Master & Bus Diagnostics
 > Layer-2 Npcap adapter selector, live slave scan table, SyncManager configuration inspection, and high-speed bus logger.
 <p align="center">
-  <img src="docs/screenshots/05_bus_diagnostics.png" width="95%" alt="Master & Bus Diagnostics" />
+  <img src="docs/screenshots/06_bus_diagnostics.png" width="95%" alt="Master & Bus Diagnostics" />
 </p>
 
 ---
@@ -162,29 +170,55 @@ me-variox-servo-motor-studio/
 │   ├── components/
 │   │   ├── ring_widget.py      # Squircle Faceplate & Dual-Half LED Canvas
 │   │   ├── gauge_widget.py     # 16-bit Position Feedback & Metric Cards
-│   │   └── scope_chart.py      # Real-Time Oscilloscope Waveform Canvas
+│   │   ├── oscilloscope.py     # Real-Time Oscilloscope Waveform Canvas
+│   │   └── about_dialog.py     # CRA Compliance & SBOM Viewer Modal
 │   └── tabs/
 │       ├── dashboard_tab.py    # Live Gauges, Status Indicators, & Controls
 │       ├── led_studio_tab.py   # LED Ring Studio, Waveforms, & Presets
 │       ├── motion_tab.py       # CiA 402 Motion & State Control
+│       ├── tuning_tab.py       # Section 8.2.1 Servo Tuning & Kinematics Studio
 │       ├── sdo_explorer_tab.py # CoE Object Dictionary Tree & SDO Read/Write
 │       └── diagnostics_tab.py  # EtherCAT Bus & SyncManager Diagnostics
 │
 ├── tests/                      # Automated Unit Test Suite
+│   ├── test_ecat_codec.py
 │   ├── test_esi_parser.py
 │   ├── test_led_ring.py
-│   ├── test_motor_device.py
-│   └── test_simulation.py
+│   └── test_simulator.py
 │
 └── docs/                       # Screenshots & UI Visuals
     └── screenshots/
         ├── 01_telemetry_dashboard.png
         ├── 02_led_ring_studio.png
         ├── 03_cia402_motion.png
-        ├── 04_sdo_explorer.png
-        ├── 05_bus_diagnostics.png
+        ├── 04_servo_tuning.png
+        ├── 05_sdo_explorer.png
+        ├── 06_bus_diagnostics.png
         └── app_icon.png
 ```
+
+---
+
+## 🛡️ Cybersecurity & Cyber Resilience Act (CRA) Compliance
+
+Murrelektronik Vario-X Motor Studio is engineered in alignment with the **EU Cyber Resilience Act (Regulation EU 2024/2847)** and **IEC 62443-4-1** (Secure Product Development Lifecycle Requirements for Industrial Automation).
+
+### 📦 Embedded Software Bill of Materials (SBOM)
+The application includes a complete, machine-readable Software Bill of Materials accessible via the **`ℹ️ About`** button in the top-right header or exportable to CycloneDX JSON format:
+
+| Component / Package | Supplier | Version | License | Type | PURL |
+| :--- | :--- | :--- | :--- | :--- | :--- |
+| `me-variox-servo-motor-studio` | Murrelektronik US Solutions Team | 1.0.0 | Proprietary | Application | `pkg:generic/murrelektronik/variox-motor-studio@1.0.0` |
+| `python` | Python Software Foundation | 3.12 / 3.10+ | PSF 2.0 | Runtime | `pkg:generic/python@3.12` |
+| `tkinter / tcl-tk` | Tcl Core Team / ActiveState | 8.6.14 | Tcl/Tk (BSD) | Framework | `pkg:generic/tcl-tk@8.6.14` |
+| `pillow` | Pillow Contributors | 11.3.0 | HPND | Library | `pkg:pypi/pillow@11.3.0` |
+| `npcap-driver / wpcap.dll` | Nmap Project / Insecure.Com | 1.79 | Npcap OEM | Driver | `pkg:generic/nmap/npcap@1.79` |
+| `variox-ecat-raw-codec` | Murrelektronik US Solutions Team | 1.0.0 | Proprietary | Internal Module | `pkg:generic/murr/ecat-raw@1.0.0` |
+| `variox-coe-sdo-engine` | Murrelektronik US Solutions Team | 1.0.0 | Proprietary | Internal Module | `pkg:generic/murr/coe-sdo@1.0.0` |
+| `variox-cia402-controller` | Murrelektronik US Solutions Team | 1.0.0 | Proprietary | Internal Module | `pkg:generic/murr/cia402-ctrl@1.0.0` |
+
+### 🔒 Vulnerability Disclosure & PSIRT
+Security advisories or vulnerability inquiries should be directed to the **Murrelektronik Product Security Incident Response Team (PSIRT)** at: `security@murrelektronik.com`.
 
 ---
 

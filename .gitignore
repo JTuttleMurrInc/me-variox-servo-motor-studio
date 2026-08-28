@@ -41,6 +41,7 @@ Desktop.ini
 # Logs & Temporary
 *.log
 scratch/
+tools/
 
 # Vendor internal / non-public documents & archives
 EtherCAT/

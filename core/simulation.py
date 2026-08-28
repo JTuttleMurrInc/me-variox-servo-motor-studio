@@ -261,6 +261,7 @@ class VirtualMotorDrive:
                 torque_target=int(self.target_torque),
                 dc_bus_voltage_mv=int(self.dc_bus_mv),
                 temperature_c=float(self.temperature_c),
+                sto_code=6 if self.sto_active else 0,
                 sto_active=self.sto_active,
                 error_code=self.error_code,
                 following_error=int(self.following_error),

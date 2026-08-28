@@ -115,8 +115,10 @@ class MotorTelemetry:
 
     def __post_init__(self):
         if self.sto_info is None:
+            if self.sto_code == 0 and self.sto_active:
+                self.sto_code = 6
             self.sto_info = decode_sto_status(self.sto_code)
-            self.sto_active = self.sto_info.is_fault or (self.sto_code != 0)
+            self.sto_active = self.sto_active or self.sto_info.is_fault or (self.sto_code != 0)
         if self.led_config is None:
             self.led_config = LedRingConfig.from_dword(self.led_ctrl_dword)
 

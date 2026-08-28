@@ -29,12 +29,17 @@ from core.ecat_raw import RawEthercatMaster
 from core.ecat_master import EthercatMaster, SlaveInfo
 from core.led_ring import LedRingConfig
 
-from gui.theme import setup_ttk_styles, COLOR_BG_DARK, COLOR_TEXT_PRIMARY, COLOR_MURR_LIME, FONT_APP_TITLE, FONT_BADGE
+from gui.theme import (
+    setup_ttk_styles, COLOR_BG_DARK, COLOR_BG_CARD, COLOR_BG_ACCENT,
+    COLOR_TEXT_PRIMARY, COLOR_MURR_LIME, FONT_APP_TITLE, FONT_BADGE, FONT_BODY_BOLD
+)
 from gui.tabs.dashboard_tab import DashboardTab
 from gui.tabs.led_studio_tab import LedStudioTab
 from gui.tabs.motion_tab import MotionTab
+from gui.tabs.tuning_tab import TuningTab
 from gui.tabs.sdo_explorer_tab import SdoExplorerTab
 from gui.tabs.diagnostics_tab import DiagnosticsTab
+from gui.components.about_dialog import AboutDialog
 
 class VarioXMotorStudioApp:
     """Root Application Controller."""
@@ -76,12 +81,14 @@ class VarioXMotorStudioApp:
         self.tab_dashboard = DashboardTab(self.notebook, self)
         self.tab_led_studio = LedStudioTab(self.notebook, self)
         self.tab_motion = MotionTab(self.notebook, self)
+        self.tab_tuning = TuningTab(self.notebook, self)
         self.tab_sdo = SdoExplorerTab(self.notebook, self)
         self.tab_diag = DiagnosticsTab(self.notebook, self)
 
         self.notebook.add(self.tab_dashboard, text="  Telemetry Dashboard  ")
         self.notebook.add(self.tab_led_studio, text="  LED Color Ring Studio  ")
         self.notebook.add(self.tab_motion, text="  CiA 402 Motion Control  ")
+        self.notebook.add(self.tab_tuning, text="  Servo Tuning & Kinematics  ")
         self.notebook.add(self.tab_sdo, text="  SDO Object Explorer  ")
         self.notebook.add(self.tab_diag, text="  Master & Bus Diagnostics  ")
 
@@ -136,12 +143,29 @@ class VarioXMotorStudioApp:
         tk.Label(title_frame, text="MURRELEKTRONIK", bg=COLOR_BG_DARK, fg=COLOR_MURR_LIME, font=(FONT_APP_TITLE[0], 15, "bold")).pack(side="left", padx=(0, 10))
         tk.Label(title_frame, text="|  Vario-X Motor Studio (EtherCAT CoE / CiA 402)", bg=COLOR_BG_DARK, fg=COLOR_TEXT_PRIMARY, font=FONT_APP_TITLE).pack(side="left")
 
+        # Right Action Frame
+        right_frame = tk.Frame(bar, bg=COLOR_BG_DARK)
+        right_frame.pack(side="right")
+
+        # About / CRA Compliance Button
+        self.btn_about = tk.Button(
+            right_frame, text="ℹ️ About", bg=COLOR_BG_CARD, fg=COLOR_TEXT_PRIMARY,
+            activebackground=COLOR_BG_ACCENT, activeforeground=COLOR_MURR_LIME,
+            font=FONT_BODY_BOLD, padx=12, pady=3, relief="flat",
+            highlightbackground=COLOR_BG_ACCENT, highlightthickness=1,
+            command=self.show_about_dialog
+        )
+        self.btn_about.pack(side="left", padx=(0, 12))
+
         # Mode Badge on right
         self.lbl_top_mode = tk.Label(
-            bar, text="SIMULATION MODE", bg="#16381C", fg=COLOR_MURR_LIME,
+            right_frame, text="SIMULATION MODE", bg="#16381C", fg=COLOR_MURR_LIME,
             font=FONT_BADGE, padx=12, pady=4
         )
-        self.lbl_top_mode.pack(side="right")
+        self.lbl_top_mode.pack(side="left")
+
+    def show_about_dialog(self):
+        AboutDialog(self.root)
 
     def set_simulation_mode(self, is_sim: bool):
         self.is_simulation = is_sim
