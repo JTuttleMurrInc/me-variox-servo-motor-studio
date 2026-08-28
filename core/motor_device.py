@@ -71,6 +71,7 @@ STO_DIAGNOSTICS: Dict[int, StoDiagnosticInfo] = {
     5: StoDiagnosticInfo(5, 0xFF1B, "0xFF1B", True, False, "STO B missing (Channel B Low)", True),
     6: StoDiagnosticInfo(6, 0xFF10, "0xFF10", True, False, "STO A & B transition High->Low within 100ms while active / Low at startup", True),
     7: StoDiagnosticInfo(7, 0xFF20, "0xFF20", False, True, "STO hardware error (Safety circuit defect)", True),
+    11: StoDiagnosticInfo(11, 0xFF10, "0xFF10", True, True, "STO A & B Missing / No Input (Both Channels Low)", True),
 }
 
 def decode_sto_status(sto_code: int) -> StoDiagnosticInfo:
