@@ -142,6 +142,9 @@ class VirtualMotorDrive:
             # Default zero bytes for uninitialized registers
             return (b'\x00\x00\x00\x00', None)
 
+    def set_controlword(self, cw: int):
+        self._handle_controlword(cw)
+
     def _handle_controlword(self, cw: int):
         self.controlword = cw
         current_state = decode_cia402_state(self.statusword)

@@ -14,59 +14,77 @@ An industrial diagnostic workbench, real-time telemetry dashboard, and optical L
 
 ---
 
-## 📸 Screenshots & Hardware Overview
+## 📸 Application Interface Gallery
 
+### 1. Telemetry Dashboard (Live Gauges & Oscilloscope)
+> Real-time 16-bit encoder position, speed, torque, DC bus voltage, temperature, and live 3-channel waveform oscilloscope.
 <p align="center">
-  <img src="docs/screenshots/dashboard.png" width="92%" alt="Vario-X Motor Studio Dashboard" />
-</p>
-
-<p align="center">
-  <img src="docs/screenshots/variox_motor.png" width="45%" alt="Vario-X Servo Motor Drive" />
+  <img src="docs/screenshots/01_telemetry_dashboard.png" width="95%" alt="Telemetry Dashboard" />
 </p>
 
 ---
 
-## ✨ Key Features
+### 2. LED Color Ring Studio (Object `0x2FEF`)
+> Full interactive control over the 32-bit optical status ring, color priority matrix, custom waveforms, and quick diagnostic presets.
+<p align="center">
+  <img src="docs/screenshots/02_led_ring_studio.png" width="95%" alt="LED Color Ring Studio" />
+</p>
 
-### 1. 🏎️ Direct Raw EtherCAT Master (Layer-2 Npcap Engine)
+---
+
+### 3. CiA 402 Motion & Drive State Controller
+> Complete servo state machine transitions (`Shutdown`, `Switch On`, `Enable Operation`, `Quick Stop`) and velocity/position setpoint targeting.
+<p align="center">
+  <img src="docs/screenshots/03_cia402_motion.png" width="95%" alt="CiA 402 Motion Control" />
+</p>
+
+---
+
+### 4. CANopen SDO Object Explorer
+> Complete tree of 140+ ESI objects with real-time SDO Upload (read) and SDO Download (write) parameter editors.
+<p align="center">
+  <img src="docs/screenshots/04_sdo_explorer.png" width="95%" alt="SDO Object Explorer" />
+</p>
+
+---
+
+### 5. Master & Bus Diagnostics
+> Layer-2 Npcap adapter selector, live slave scan table, SyncManager configuration inspection, and high-speed bus logger.
+<p align="center">
+  <img src="docs/screenshots/05_bus_diagnostics.png" width="95%" alt="Master & Bus Diagnostics" />
+</p>
+
+---
+
+## ✨ Key Capabilities
+
+### 🏎️ Direct Raw EtherCAT Master (Layer-2 Npcap Engine)
 - **Zero-overhead raw socket EtherCAT master** operating over Windows Npcap.
 - Automatic slave discovery (`APWR`, `FPRD`, `FPWR`, `BRD`) and SyncManager (`SM0`, `SM1`) mailbox configuration.
-- Transitions slaves seamlessly through `INIT` $\to$ `PRE-OP` $\to$ `SAFE-OP` $\to$ `OP`.
+- Transitions slaves through `INIT` $\to$ `PRE-OP` $\to$ `SAFE-OP` $\to$ `OP`.
 
-### 2. 🎯 High-Precision Encoder Feedback (16-bit Multiturn / Singleturn)
+### 🎯 High-Precision Encoder Feedback (16-bit Multiturn / Singleturn)
 - Full 32-bit absolute position acquisition via CANopen object `0x6064:00`.
 - Exact hardware calibration for **16-bit single-turn resolution ($65,536\,\text{counts/revolution}$)** and **16-bit multiturn range ($\pm 32,768\,\text{turns}$)**.
 - Interactive angle dial indicator with zero-offset zeroing.
 
-### 3. 🌈 Optical LED Color Ring Studio (`Object 0x2FEF`)
+### 🌈 Optical LED Color Ring Studio (`Object 0x2FEF`)
 - Full interactive control over the 32-bit `LED_CTRL` register (`0x2FEF:01`) and `LED_Status` (`0x2FEF:02`).
 - 60 FPS real-time animated squircle faceplate simulator.
-- Pre-configured industrial status presets:
-  - *Solid Green (Normal Operation)*
-  - *Green Pulse 1 Hz (Ready / Standby)*
-  - *Solid Yellow (Warning / Setup)*
-  - *Yellow Flash 1 Hz (Caution Notice)*
-  - *Solid Red (E-Stop / Fault Active)*
-  - *Red Strobe 2 Hz (Critical Alarm)*
-  - *Dual Amber / Green (Status Sync)*
-  - *Rotating Chaser & Police Emergency Strobes*
-- Dynamic bitfield breakdown (User mode bit 31, Red right/left nibbles, Yellow right/left nibbles, Green right/left nibbles).
+- Pre-configured industrial status presets (*Solid Green*, *Green Pulse*, *Caution Yellow*, *Critical Alarm Red*, *Emergency Strobes*).
 
-### 4. ⚙️ CiA 402 Servo State Machine & Motion Control
+### ⚙️ CiA 402 Servo State Machine & Motion Control
 - Direct control over Controlword (`0x6040`) and Statusword (`0x6041`).
-- Implements the complete CiA 402 drive state transition graph:
-  - `Not Ready to Switch On` $\to$ `Switch On Disabled` $\to$ `Ready to Switch On` $\to$ `Switched On` $\to$ `Operation Enabled`.
-  - Fault resets and Quick Stop command handling.
+- Implements the complete CiA 402 drive state transition graph.
 - Motion modes: Profile Velocity (`PV`), Profile Position (`PP`), Cyclic Synchronous Velocity (`CSV`), Cyclic Synchronous Position (`CSP`).
 
-### 5. 🔍 CANopen SDO Object Dictionary Explorer
+### 🔍 CANopen SDO Object Dictionary Explorer
 - Fully populated from official **Murrelektronik ESI XML** (`MD60-1-4000-F0S16M16-01`).
 - 140+ documented manufacturer, CiA 402, and diagnostic objects (`0x1000`–`0x60FF`).
-- Live SDO Upload (Read) and SDO Download (Write) with type validation.
 
-### 6. 🧪 Built-in Virtual Motor Simulation Engine
+### 🧪 Built-in Virtual Motor Simulation Engine
 - Complete hardware-in-the-loop (HIL) mathematical physics simulator.
-- Enables full testing of GUI features, LED ring sequences, CiA 402 transitions, and oscilloscope feedback without requiring physical hardware connected.
+- Enables full testing of GUI features, LED ring sequences, CiA 402 transitions, and oscilloscope feedback offline.
 
 ---
 
@@ -118,6 +136,7 @@ python app.py --sim
 ```text
 me-variox-servo-motor-studio/
 ├── app.py                      # Root Application Controller & Tkinter Lifecycle
+├── capture_tabs.py             # Automated UI Screenshot Generator
 ├── create_icon.py              # Icon Asset Builder
 ├── live_workbench.py           # CLI Hardware Test Harness & Diagnostic Suite
 ├── requirements.txt            # Python Dependencies (Pillow, etc.)
@@ -153,8 +172,14 @@ me-variox-servo-motor-studio/
 │   ├── test_motor_device.py
 │   └── test_simulation.py
 │
-└── docs/                       # Engineering Drawings & Screenshots
+└── docs/                       # Screenshots & UI Visuals
     └── screenshots/
+        ├── 01_telemetry_dashboard.png
+        ├── 02_led_ring_studio.png
+        ├── 03_cia402_motion.png
+        ├── 04_sdo_explorer.png
+        ├── 05_bus_diagnostics.png
+        └── app_icon.png
 ```
 
 ---
