@@ -6,7 +6,7 @@ import os
 from PIL import Image, ImageDraw, ImageFilter, ImageFont
 
 SRC_IMG = r"C:\Users\Tuttle\.gemini\antigravity-ide\brain\aeee9484-f7e6-4449-b8f4-b8d51008fd90\.user_uploaded\media_1787945235469.png"
-OUT_DIR = r"c:\Users\Tuttle\OneDrive - Murrelektronik GmbH\Documents\Projects\Internal Customer Projects\US Solutions Team Tools\Motor Demo\assets"
+OUT_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "assets"))
 os.makedirs(OUT_DIR, exist_ok=True)
 
 SIZE = 512

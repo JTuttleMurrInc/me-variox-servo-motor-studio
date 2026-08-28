@@ -9,6 +9,8 @@ import time
 import struct
 from typing import Optional, Tuple
 
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
+
 from core.ecat_raw import (
     RawEthercatMaster,
     REG_TYPE_REV, REG_STATION_ADDR, REG_AL_CONTROL, REG_AL_STATUS, REG_AL_STATUS_CODE,

@@ -4,10 +4,14 @@ Uses native Windows PrintWindow API to cleanly capture all 5 tabs in high defini
 """
 
 import os
+import sys
 import time
 import struct
 import ctypes
 from ctypes import wintypes
+
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
+
 import tkinter as tk
 from PIL import Image
 
@@ -15,7 +19,7 @@ from app import VarioXMotorStudioApp
 from core.motor_device import OperationMode
 from core.led_ring import RING_PRESETS
 
-OUT_DIR = os.path.abspath("docs/screenshots")
+OUT_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "docs", "screenshots"))
 os.makedirs(OUT_DIR, exist_ok=True)
 
 def capture_hwnd(hwnd):
