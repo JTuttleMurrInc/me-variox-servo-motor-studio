@@ -52,6 +52,42 @@ CMD_DISABLE_OP       = 0x0007
 CMD_FAULT_RESET      = 0x0080
 
 @dataclass
+class StoDiagnosticInfo:
+    """Detailed STO Diagnostic state from Section 8.1.4 (Object 0x60F7.11)."""
+    code: int
+    error_code: int
+    error_code_hex: str
+    sto1_active: bool  # bit 6
+    sto2_active: bool  # bit 7
+    description: str
+    is_fault: bool
+
+STO_DIAGNOSTICS: Dict[int, StoDiagnosticInfo] = {
+    0: StoDiagnosticInfo(0, 0x0000, "0x0000", False, False, "STO A = High, STO B = High, No Error (Safe)", False),
+    1: StoDiagnosticInfo(1, 0xFF21, "0xFF21", False, True, "Self-diagnostics CPU cannot find STO high signal", True),
+    2: StoDiagnosticInfo(2, 0xFF22, "0xFF22", False, True, "Theoretically impossible state (STO internal fault)", True),
+    3: StoDiagnosticInfo(3, 0xFF1A, "0xFF1A", True, False, "STO A missing (Channel A Low)", True),
+    4: StoDiagnosticInfo(4, 0xFF21, "0xFF21", False, True, "Theoretically impossible state (STO internal fault)", True),
+    5: StoDiagnosticInfo(5, 0xFF1B, "0xFF1B", True, False, "STO B missing (Channel B Low)", True),
+    6: StoDiagnosticInfo(6, 0xFF10, "0xFF10", True, False, "STO A & B transition High->Low within 100ms while active / Low at startup", True),
+    7: StoDiagnosticInfo(7, 0xFF20, "0xFF20", False, True, "STO hardware error (Safety circuit defect)", True),
+}
+
+def decode_sto_status(sto_code: int) -> StoDiagnosticInfo:
+    """Decodes Object 0x60F7.11 into detailed STO channel and fault diagnostics."""
+    if sto_code in STO_DIAGNOSTICS:
+        return STO_DIAGNOSTICS[sto_code]
+    return StoDiagnosticInfo(
+        code=sto_code,
+        error_code=0xFFFF,
+        error_code_hex=f"0x{sto_code:04X}",
+        sto1_active=bool(sto_code & (1 << 6)),
+        sto2_active=bool(sto_code & (1 << 7)),
+        description=f"STO Diagnostic Code 0x{sto_code:02X}",
+        is_fault=sto_code != 0
+    )
+
+@dataclass
 class MotorTelemetry:
     """Live telemetry packet sampled from Vario-X Motor Drive."""
     timestamp: float = 0.0
@@ -68,7 +104,9 @@ class MotorTelemetry:
     torque_target: int = 0
     dc_bus_voltage_mv: int = 48000 # mV
     temperature_c: float = 25.0   # °C
-    sto_active: bool = False      # Safe Torque Off
+    sto_code: int = 0             # Object 0x60F7.11 (STO_Status)
+    sto_info: Optional[StoDiagnosticInfo] = None
+    sto_active: bool = False      # Safe Torque Off Tripped/Active
     error_code: int = 0
     following_error: int = 0
     led_status_dword: int = 0
@@ -76,6 +114,9 @@ class MotorTelemetry:
     led_config: LedRingConfig = None
 
     def __post_init__(self):
+        if self.sto_info is None:
+            self.sto_info = decode_sto_status(self.sto_code)
+            self.sto_active = self.sto_info.is_fault or (self.sto_code != 0)
         if self.led_config is None:
             self.led_config = LedRingConfig.from_dword(self.led_ctrl_dword)
 

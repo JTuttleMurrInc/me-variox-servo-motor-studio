@@ -162,10 +162,12 @@ class DashboardTab(tk.Frame):
         mode_name = MODE_NAMES.get(t.mode_display, f"Mode {t.mode_display}").upper()
         self.lbl_mode_pill.config(text=mode_name)
 
-        if t.sto_active:
+        if t.sto_info and t.sto_info.is_fault:
+            self.lbl_sto_pill.config(text=f"STO: {t.sto_info.error_code_hex}", bg="#4A141A", fg=COLOR_DANGER)
+        elif t.sto_active:
             self.lbl_sto_pill.config(text="STO TRIPPED", bg="#4A141A", fg=COLOR_DANGER)
         else:
-            self.lbl_sto_pill.config(text="STO OK", bg="#16381C", fg=COLOR_MURR_LIME)
+            self.lbl_sto_pill.config(text="STO OK (A+B HIGH)", bg="#16381C", fg=COLOR_MURR_LIME)
 
         # Update Position Card
         self.card_position.set_position(t.position_actual)
