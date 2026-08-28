@@ -32,18 +32,20 @@ An industrial diagnostic workbench, real-time telemetry dashboard, and optical L
 
 ---
 
-### 3. CiA 402 Motion & Drive State Controller
-> Complete servo state machine transitions (`Shutdown`, `Switch On`, `Enable Operation`, `Quick Stop`) and velocity/position setpoint targeting.
+### 3. CiA 402 Motion & Drive State Controller *(⚠️ Untested on Live Hardware)*
+> Complete servo state machine transitions (`Shutdown`, `Switch On`, `Enable Operation`, `Quick Stop`) and velocity/position setpoint targeting.  
+> **Note:** *This section is currently implemented & simulated, but untested on live hardware.*
 <p align="center">
-  <img src="docs/screenshots/03_cia402_motion.png" width="95%" alt="CiA 402 Motion Control" />
+  <img src="docs/screenshots/03_cia402_motion.png" width="95%" alt="CiA 402 Motion Control (Untested)" />
 </p>
 
 ---
 
-### 4. CANopen SDO Object Explorer
-> Complete tree of 140+ ESI objects with real-time SDO Upload (read) and SDO Download (write) parameter editors.
+### 4. CANopen SDO Object Explorer *(⚠️ Untested on Live Hardware)*
+> Complete tree of 140+ ESI objects with real-time SDO Upload (read) and SDO Download (write) parameter editors.  
+> **Note:** *This section is currently implemented & simulated, but untested on live hardware.*
 <p align="center">
-  <img src="docs/screenshots/04_sdo_explorer.png" width="95%" alt="SDO Object Explorer" />
+  <img src="docs/screenshots/04_sdo_explorer.png" width="95%" alt="SDO Object Explorer (Untested)" />
 </p>
 
 ---
@@ -73,14 +75,16 @@ An industrial diagnostic workbench, real-time telemetry dashboard, and optical L
 - 60 FPS real-time animated squircle faceplate simulator.
 - Pre-configured industrial status presets (*Solid Green*, *Green Pulse*, *Caution Yellow*, *Critical Alarm Red*, *Emergency Strobes*).
 
-### ⚙️ CiA 402 Servo State Machine & Motion Control
+### ⚙️ CiA 402 Servo State Machine & Motion Control *(⚠️ Untested on Live Hardware)*
 - Direct control over Controlword (`0x6040`) and Statusword (`0x6041`).
 - Implements the complete CiA 402 drive state transition graph.
 - Motion modes: Profile Velocity (`PV`), Profile Position (`PP`), Cyclic Synchronous Velocity (`CSV`), Cyclic Synchronous Position (`CSP`).
+- *(Implemented and verified in simulation; pending live physical drive commissioning)*
 
-### 🔍 CANopen SDO Object Dictionary Explorer
+### 🔍 CANopen SDO Object Dictionary Explorer *(⚠️ Untested on Live Hardware)*
 - Fully populated from official **Murrelektronik ESI XML** (`MD60-1-4000-F0S16M16-01`).
 - 140+ documented manufacturer, CiA 402, and diagnostic objects (`0x1000`–`0x60FF`).
+- *(Implemented and verified in simulation; pending live physical drive commissioning)*
 
 ### 🧪 Built-in Virtual Motor Simulation Engine
 - Complete hardware-in-the-loop (HIL) mathematical physics simulator.
