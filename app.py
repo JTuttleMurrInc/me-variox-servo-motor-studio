@@ -146,12 +146,12 @@ class VarioXMotorStudioApp:
             try:
                 from PIL import Image, ImageTk
                 im = Image.open(logo_png)
-                h_target = 24
+                h_target = 22
                 w_target = int(im.width * (h_target / float(im.height)))
                 im_resized = im.resize((w_target, h_target), Image.Resampling.LANCZOS)
                 self._header_logo_img = ImageTk.PhotoImage(im_resized)
-                self.lbl_logo = tk.Label(title_frame, image=self._header_logo_img, bg=COLOR_BG_DARK)
-                self.lbl_logo.pack(side="left", padx=(0, 12))
+                self.lbl_logo = tk.Label(title_frame, image=self._header_logo_img, bg=COLOR_BG_DARK, bd=0, highlightthickness=0)
+                self.lbl_logo.pack(side="left", padx=(0, 10))
             except Exception:
                 tk.Label(title_frame, text="MURRELEKTRONIK", bg=COLOR_BG_DARK, fg=COLOR_MURR_LIME, font=(FONT_APP_TITLE[0], 15, "bold")).pack(side="left", padx=(0, 10))
         else:
