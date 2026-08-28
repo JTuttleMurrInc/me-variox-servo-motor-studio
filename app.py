@@ -140,7 +140,23 @@ class VarioXMotorStudioApp:
         title_frame = tk.Frame(bar, bg=COLOR_BG_DARK)
         title_frame.pack(side="left")
 
-        tk.Label(title_frame, text="MURRELEKTRONIK", bg=COLOR_BG_DARK, fg=COLOR_MURR_LIME, font=(FONT_APP_TITLE[0], 15, "bold")).pack(side="left", padx=(0, 10))
+        # Official Murrelektronik Vector Logo in header
+        logo_png = os.path.abspath(os.path.join(os.path.dirname(__file__), "assets", "murr_logo.png"))
+        if os.path.exists(logo_png):
+            try:
+                from PIL import Image, ImageTk
+                im = Image.open(logo_png)
+                h_target = 24
+                w_target = int(im.width * (h_target / float(im.height)))
+                im_resized = im.resize((w_target, h_target), Image.Resampling.LANCZOS)
+                self._header_logo_img = ImageTk.PhotoImage(im_resized)
+                self.lbl_logo = tk.Label(title_frame, image=self._header_logo_img, bg=COLOR_BG_DARK)
+                self.lbl_logo.pack(side="left", padx=(0, 12))
+            except Exception:
+                tk.Label(title_frame, text="MURRELEKTRONIK", bg=COLOR_BG_DARK, fg=COLOR_MURR_LIME, font=(FONT_APP_TITLE[0], 15, "bold")).pack(side="left", padx=(0, 10))
+        else:
+            tk.Label(title_frame, text="MURRELEKTRONIK", bg=COLOR_BG_DARK, fg=COLOR_MURR_LIME, font=(FONT_APP_TITLE[0], 15, "bold")).pack(side="left", padx=(0, 10))
+
         tk.Label(title_frame, text="|  Vario-X Motor Studio (EtherCAT CoE / CiA 402)", bg=COLOR_BG_DARK, fg=COLOR_TEXT_PRIMARY, font=FONT_APP_TITLE).pack(side="left")
 
         # Right Action Frame
