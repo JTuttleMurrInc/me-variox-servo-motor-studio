@@ -1,0 +1,691 @@
+<?xml version="1.0" encoding="iso-8859-1"?>
+<EtherCATInfo xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="EtherCATInfo.xsd" Version="1.6">
+	<Vendor FileVersion="20210618">
+		<Id>#x1A3</Id>
+		<Name>Technosoft</Name>
+		<ImageData16x14>424DE6000000000000007600000028000000100000000E000000010004000000000070000000000000000000000000000000000000000000000000008000008000000080800080000000800080008080000080808000C0C0C0000000FF0000FF000000FFFF00FF000000FF00FF00FFFF0000FFFFFF00FFFF00000000FFFFFFF00AAAAAA00FFFFF00AAA0AAAA00FFF00AAA000AAAA00FF0AAAAAA00AAAA0F00AAAAAA00AAAA000AAAAAAA00AAAAA00AAAAAA00AAAAAA000AAAAA00AAAAA00F0AA00A00A00AA0FF00A000A00A0A00FFF00AAAAAAAA00FFFFF00AAAAAA00FFFFFFF00000000FFFF</ImageData16x14>
+	</Vendor>
+	<Descriptions>
+		<Groups>
+			<Group SortOrder="0">
+				<Type>Servo Drive</Type>
+				<Name LcId="1033">Intelligent Motion Drive</Name>
+				<Image16x14>DRIVE</Image16x14>
+			</Group>
+		</Groups>
+		<Devices>
+			<!--iPOS4803C Microdrive . FA02E-->
+			<Device Physics="YY">
+				<Type ProductCode="20001201" RevisionNo="#x41303245">iPOS4803C Microdrive</Type>
+				<Name LcId="1033">iPOS4803C Microdrive</Name>
+				<URL>http://www.technosoftmotion.com</URL>
+				<Info>
+					<StateMachine>
+						<Timeout>
+							<PreopTimeout>2000</PreopTimeout>
+							<SafeopOpTimeout>9000</SafeopOpTimeout>
+							<BackToInitTimeout>5000</BackToInitTimeout>
+							<BackToSafeopTimeout>200</BackToSafeopTimeout>
+						</Timeout>
+					</StateMachine>
+					<Mailbox>
+						<Timeout>
+							<RequestTimeout>100</RequestTimeout>
+							<ResponseTimeout>20000</ResponseTimeout>
+						</Timeout>
+					</Mailbox>
+				</Info>
+				<GroupType>Servo Drive</GroupType>
+				<Profile>
+					<ChannelInfo>
+						<ProfileNo>402</ProfileNo>
+					</ChannelInfo>
+					<DictionaryFile>Technosoft.FA02E.Dict.xml</DictionaryFile>
+				</Profile>
+				<Fmmu>Outputs</Fmmu>
+				<Fmmu>Inputs</Fmmu>
+				<Fmmu>MBoxState</Fmmu>
+				<Sm MinSize="32" MaxSize="256" DefaultSize="128" StartAddress="#x1000" ControlByte="#x26" Enable="1">MBoxOut</Sm>
+				<Sm MinSize="32" MaxSize="256" DefaultSize="128" StartAddress="#x1400" ControlByte="#x22" Enable="1">MBoxIn</Sm>
+				<Sm DefaultSize="6" StartAddress="#x1800" ControlByte="#x64" Enable="1">Outputs</Sm>
+				<Sm DefaultSize="16" StartAddress="#x1c00" ControlByte="#x20" Enable="1">Inputs</Sm>
+				<RxPdo Fixed="false" Sm="2">
+					<Index>#x1600</Index>
+					<Name>Receive PDO 1 mapping parameters</Name>
+					<Entry>
+						<Index>#x6040</Index>
+						<SubIndex>0</SubIndex>
+						<BitLen>16</BitLen>
+						<Name>Controlword</Name>
+						<DataType>UINT</DataType>
+					</Entry>
+					<Entry>
+						<Index>#x607A</Index>
+						<SubIndex>0</SubIndex>
+						<BitLen>32</BitLen>
+						<Name>Target position</Name>
+						<DataType>DINT</DataType>
+					</Entry>
+				</RxPdo>
+				<RxPdo Fixed="false">
+					<Index>#x1601</Index>
+					<Name>Receive PDO 2 mapping parameters</Name>
+					<Entry>
+						<Index>#x60FE</Index>
+						<SubIndex>1</SubIndex>
+						<BitLen>32</BitLen>
+						<Name>Digital outputs - Physical outputs</Name>
+						<DataType>UDINT</DataType>
+					</Entry>
+					<Entry>
+						<Index>#x60FE</Index>
+						<SubIndex>2</SubIndex>
+						<BitLen>32</BitLen>
+						<Name>Digital outputs - Bit mask</Name>
+						<DataType>UDINT</DataType>
+					</Entry>
+				</RxPdo>
+				<RxPdo Fixed="false">
+					<Index>#x1602</Index>
+					<Name>Receive PDO 3 mapping parameters</Name>
+					<Entry>
+						<Index>#x6060</Index>
+						<SubIndex>0</SubIndex>
+						<BitLen>8</BitLen>
+						<Name>Modes of operation</Name>
+						<DataType>SINT</DataType>
+					</Entry>
+					<Entry>
+						<Index>#x6071</Index>
+						<SubIndex>0</SubIndex>
+						<BitLen>16</BitLen>
+						<Name>Target torque</Name>
+						<DataType>INT</DataType>
+					</Entry>
+				</RxPdo>
+				<RxPdo Fixed="false">
+					<Index>#x1603</Index>
+					<Name>Receive PDO 4 mapping parameters</Name>
+					<Entry>
+						<Index>#x6081</Index>
+						<SubIndex>0</SubIndex>
+						<BitLen>32</BitLen>
+						<Name>Profile velocity</Name>
+						<DataType>DINT</DataType>
+					</Entry>
+					<Entry>
+						<Index>#x6083</Index>
+						<SubIndex>0</SubIndex>
+						<BitLen>32</BitLen>
+						<Name>Profile acceleration</Name>
+						<DataType>DINT</DataType>
+					</Entry>
+				</RxPdo>
+				<TxPdo Fixed="false" Sm="3">
+					<Index>#x1A00</Index>
+					<Name>Transmit PDO 1 mapping parameters</Name>
+					<Entry>
+						<Index>#x6041</Index>
+						<SubIndex>0</SubIndex>
+						<BitLen>16</BitLen>
+						<Name>Statusword</Name>
+						<DataType>UINT</DataType>
+					</Entry>
+					<Entry>
+						<Index>#x6064</Index>
+						<SubIndex>0</SubIndex>
+						<BitLen>32</BitLen>
+						<Name>Position actual value</Name>
+						<DataType>DINT</DataType>
+					</Entry>
+					<Entry>
+						<Index>#x6077</Index>
+						<SubIndex>0</SubIndex>
+						<BitLen>16</BitLen>
+						<Name>Torque (current) actual value</Name>
+						<DataType>INT</DataType>
+					</Entry>
+				</TxPdo>
+				<TxPdo Fixed="false" Sm="3">
+					<Index>#x1A01</Index>
+					<Name>Transmit PDO 2 mapping parameters</Name>
+					<Entry>
+						<Index>#x60F4</Index>
+						<SubIndex>0</SubIndex>
+						<BitLen>32</BitLen>
+						<Name>Following error actual value</Name>
+						<DataType>DINT</DataType>
+					</Entry>
+					<Entry>
+						<Index>#x60FD</Index>
+						<SubIndex>0</SubIndex>
+						<BitLen>32</BitLen>
+						<Name>Digital inputs</Name>
+						<DataType>UDINT</DataType>
+					</Entry>
+				</TxPdo>
+				<TxPdo Fixed="false">
+					<Index>#x1A02</Index>
+					<Name>Transmit PDO 3 mapping parameters</Name>
+					<Entry>
+						<Index>#x606C</Index>
+						<SubIndex>0</SubIndex>
+						<BitLen>32</BitLen>
+						<Name>Velocity actual value</Name>
+						<DataType>DINT</DataType>
+					</Entry>
+				</TxPdo>
+				<TxPdo Fixed="false">
+					<Index>#x1A03</Index>
+					<Name>Transmit PDO 4 mapping parameters</Name>
+					<Entry>
+						<Index>#x6061</Index>
+						<SubIndex>0</SubIndex>
+						<BitLen>8</BitLen>
+						<Name>Modes of operation display</Name>
+						<DataType>SINT</DataType>
+					</Entry>
+				</TxPdo>
+				<Mailbox DataLinkLayer="true">
+					<EoE/>
+					<CoE SdoInfo="1" PdoAssign="1" PdoConfig="1" CompleteAccess="false" SegmentedSdo="1">
+						<InitCmd>
+							<Transition>PS</Transition>
+							<Index>#x6060</Index>
+							<SubIndex>0</SubIndex>
+							<Data>08</Data>
+							<Comment>Modes of Operation  = CSP</Comment>
+						</InitCmd>
+					</CoE>
+					<FoE/>
+				</Mailbox>
+				<Dc>
+					<OpMode>
+						<Name>DcSync</Name>
+						<Desc>DC-Synchron</Desc>
+						<AssignActivate>#x0330</AssignActivate>
+						<CycleTimeSync0 Factor="1">0</CycleTimeSync0>
+						<ShiftTimeSync0>0</ShiftTimeSync0>
+					</OpMode>
+					<OpMode>
+						<Name>Free</Name>
+						<Desc>DC unused (no sync)</Desc>
+						<AssignActivate>#x0000</AssignActivate>
+					</OpMode>
+				</Dc>
+				<ESC>
+					<Reg0410>19000</Reg0410>
+					<Reg0420>19000</Reg0420>
+				</ESC>
+				<Eeprom>
+					<ByteSize>2048</ByteSize>
+					<ConfigData>8004030EF40100000000</ConfigData>
+					<BootStrap>0010800000148000</BootStrap>
+				</Eeprom>
+				<Image16x14>DRIVE</Image16x14>
+			</Device>
+			<!--iPOS4803P-CAT Microdrive . FA02E-->
+			<Device Physics="YY">
+				<Type ProductCode="20001122" RevisionNo="#x41303245">iPOS4803P CAT Microdrive</Type>
+				<Name LcId="1033">iPOS4803P CAT Microdrive</Name>
+				<URL>http://www.technosoftmotion.com</URL>
+				<Info>
+					<StateMachine>
+						<Timeout>
+							<PreopTimeout>2000</PreopTimeout>
+							<SafeopOpTimeout>9000</SafeopOpTimeout>
+							<BackToInitTimeout>5000</BackToInitTimeout>
+							<BackToSafeopTimeout>200</BackToSafeopTimeout>
+						</Timeout>
+					</StateMachine>
+					<Mailbox>
+						<Timeout>
+							<RequestTimeout>100</RequestTimeout>
+							<ResponseTimeout>20000</ResponseTimeout>
+						</Timeout>
+					</Mailbox>
+				</Info>
+				<GroupType>Servo Drive</GroupType>
+				<Profile>
+					<ChannelInfo>
+						<ProfileNo>402</ProfileNo>
+					</ChannelInfo>
+					<DictionaryFile>Technosoft.FA02E.Dict.xml</DictionaryFile>
+				</Profile>
+				<Fmmu>Outputs</Fmmu>
+				<Fmmu>Inputs</Fmmu>
+				<Fmmu>MBoxState</Fmmu>
+				<Sm MinSize="32" MaxSize="256" DefaultSize="128" StartAddress="#x1000" ControlByte="#x26" Enable="1">MBoxOut</Sm>
+				<Sm MinSize="32" MaxSize="256" DefaultSize="128" StartAddress="#x1400" ControlByte="#x22" Enable="1">MBoxIn</Sm>
+				<Sm DefaultSize="6" StartAddress="#x1800" ControlByte="#x64" Enable="1">Outputs</Sm>
+				<Sm DefaultSize="16" StartAddress="#x1c00" ControlByte="#x20" Enable="1">Inputs</Sm>
+				<RxPdo Fixed="false" Sm="2">
+					<Index>#x1600</Index>
+					<Name>Receive PDO 1 mapping parameters</Name>
+					<Entry>
+						<Index>#x6040</Index>
+						<SubIndex>0</SubIndex>
+						<BitLen>16</BitLen>
+						<Name>Controlword</Name>
+						<DataType>UINT</DataType>
+					</Entry>
+					<Entry>
+						<Index>#x6060</Index>
+						<SubIndex>0</SubIndex>
+						<BitLen>8</BitLen>
+						<Name>Modes of operation</Name>
+						<DataType>SINT</DataType>
+					</Entry>                    
+					<Entry>
+						<Index>#x6071</Index>
+						<SubIndex>0</SubIndex>
+						<BitLen>16</BitLen>
+						<Name>Target torque</Name>
+						<DataType>INT</DataType>
+					</Entry>                    
+					<Entry>
+						<Index>#x607A</Index>
+						<SubIndex>0</SubIndex>
+						<BitLen>32</BitLen>
+						<Name>Target position</Name>
+						<DataType>DINT</DataType>
+					</Entry>                    
+					<Entry>
+						<Index>#x60FF</Index>
+						<SubIndex>0</SubIndex>
+						<BitLen>32</BitLen>
+						<Name>Target velocity</Name>
+						<DataType>DINT</DataType>
+					</Entry>                    
+				</RxPdo>
+				<RxPdo Fixed="false">
+					<Index>#x1601</Index>
+					<Name>Receive PDO 2 mapping parameters</Name>
+					<Entry>
+						<Index>#x60FE</Index>
+						<SubIndex>1</SubIndex>
+						<BitLen>32</BitLen>
+						<Name>Digital outputs - Physical outputs</Name>
+						<DataType>UDINT</DataType>
+					</Entry>
+					<Entry>
+						<Index>#x60FE</Index>
+						<SubIndex>2</SubIndex>
+						<BitLen>32</BitLen>
+						<Name>Digital outputs - Bit mask</Name>
+						<DataType>UDINT</DataType>
+					</Entry>
+				</RxPdo>
+				<RxPdo Fixed="false">
+					<Index>#x1602</Index>
+					<Name>Receive PDO 3 mapping parameters</Name>
+					<Entry>
+						<Index>#x6060</Index>
+						<SubIndex>0</SubIndex>
+						<BitLen>8</BitLen>
+						<Name>Modes of operation</Name>
+						<DataType>SINT</DataType>
+					</Entry>
+					<Entry>
+						<Index>#x6071</Index>
+						<SubIndex>0</SubIndex>
+						<BitLen>16</BitLen>
+						<Name>Target torque</Name>
+						<DataType>INT</DataType>
+					</Entry>
+				</RxPdo>
+				<RxPdo Fixed="false">
+					<Index>#x1603</Index>
+					<Name>Receive PDO 4 mapping parameters</Name>
+					<Entry>
+						<Index>#x6081</Index>
+						<SubIndex>0</SubIndex>
+						<BitLen>32</BitLen>
+						<Name>Profile velocity</Name>
+						<DataType>DINT</DataType>
+					</Entry>
+					<Entry>
+						<Index>#x6083</Index>
+						<SubIndex>0</SubIndex>
+						<BitLen>32</BitLen>
+						<Name>Profile acceleration</Name>
+						<DataType>DINT</DataType>
+					</Entry>
+				</RxPdo>
+				<TxPdo Fixed="false" Sm="3">
+					<Index>#x1A00</Index>
+					<Name>Transmit PDO 1 mapping parameters</Name>
+					<Entry>
+						<Index>#x6041</Index>
+						<SubIndex>0</SubIndex>
+						<BitLen>16</BitLen>
+						<Name>Statusword</Name>
+						<DataType>UINT</DataType>
+					</Entry>
+					<Entry>
+						<Index>#x6061</Index>
+						<SubIndex>0</SubIndex>
+						<BitLen>8</BitLen>
+						<Name>Modes of operation display</Name>
+						<DataType>SINT</DataType>
+					</Entry>                    
+					<Entry>
+						<Index>#x6064</Index>
+						<SubIndex>0</SubIndex>
+						<BitLen>32</BitLen>
+						<Name>Position actual value</Name>
+						<DataType>DINT</DataType>
+					</Entry>
+					<Entry>
+						<Index>#x606C</Index>
+						<SubIndex>0</SubIndex>
+						<BitLen>32</BitLen>
+						<Name>Velocity actual value</Name>
+						<DataType>DINT</DataType>
+					</Entry>
+					<Entry>
+						<Index>#x6077</Index>
+						<SubIndex>0</SubIndex>
+						<BitLen>16</BitLen>
+						<Name>Torque (current) actual value</Name>
+						<DataType>INT</DataType>
+					</Entry>
+					<Entry>
+						<Index>#x60F4</Index>
+						<SubIndex>0</SubIndex>
+						<BitLen>32</BitLen>
+						<Name>Following error actual value</Name>
+						<DataType>DINT</DataType>
+					</Entry>                                    
+				</TxPdo>
+				<TxPdo Fixed="false">
+					<Index>#x1A01</Index>
+					<Name>Transmit PDO 2 mapping parameters</Name>
+					<Entry>
+						<Index>#x60F4</Index>
+						<SubIndex>0</SubIndex>
+						<BitLen>32</BitLen>
+						<Name>Following error actual value</Name>
+						<DataType>DINT</DataType>
+					</Entry>
+					<Entry>
+						<Index>#x60FD</Index>
+						<SubIndex>0</SubIndex>
+						<BitLen>32</BitLen>
+						<Name>Digital inputs</Name>
+						<DataType>UDINT</DataType>
+					</Entry>
+				</TxPdo>
+				<TxPdo Fixed="false">
+					<Index>#x1A02</Index>
+					<Name>Transmit PDO 3 mapping parameters</Name>
+					<Entry>
+						<Index>#x606C</Index>
+						<SubIndex>0</SubIndex>
+						<BitLen>32</BitLen>
+						<Name>Velocity actual value</Name>
+						<DataType>DINT</DataType>
+					</Entry>
+				</TxPdo>
+				<TxPdo Fixed="false">
+					<Index>#x1A03</Index>
+					<Name>Transmit PDO 4 mapping parameters</Name>
+					<Entry>
+						<Index>#x6061</Index>
+						<SubIndex>0</SubIndex>
+						<BitLen>8</BitLen>
+						<Name>Modes of operation display</Name>
+						<DataType>SINT</DataType>
+					</Entry>
+				</TxPdo>
+				<Mailbox DataLinkLayer="true">
+					<EoE/>
+					<CoE SdoInfo="1" PdoAssign="1" PdoConfig="1" CompleteAccess="false" SegmentedSdo="1">
+						<InitCmd>
+							<Transition>PS</Transition>
+							<Index>#x6060</Index>
+							<SubIndex>0</SubIndex>
+							<Data>08</Data>
+							<Comment>Modes of Operation  = CSP</Comment>
+						</InitCmd>
+					</CoE>
+					<FoE/>
+				</Mailbox>
+				<Dc>
+					<OpMode>
+						<Name>DcSync</Name>
+						<Desc>DC-Synchron</Desc>
+						<AssignActivate>#x0330</AssignActivate>
+						<CycleTimeSync0 Factor="1">0</CycleTimeSync0>
+						<ShiftTimeSync0>0</ShiftTimeSync0>
+					</OpMode>
+					<OpMode>
+						<Name>Free</Name>
+						<Desc>DC unused (no sync)</Desc>
+						<AssignActivate>#x0000</AssignActivate>
+					</OpMode>
+				</Dc>
+				<ESC>
+					<Reg0410>19000</Reg0410>
+					<Reg0420>19000</Reg0420>
+				</ESC>
+				<Eeprom>
+					<ByteSize>2048</ByteSize>
+					<ConfigData>8004030EF40100000000</ConfigData>
+					<BootStrap>0010800000148000</BootStrap>
+				</Eeprom>
+				<Image16x14>DRIVE</Image16x14>
+			</Device>
+			<!--iPOS4803PE/S/SY-CAT Microdrive . FA02E-->
+			<Device Physics="YY">
+				<Type ProductCode="20801222" RevisionNo="#x41303245">iPOS4803PE/S/SY  CAT Microdrive</Type>
+				<Name LcId="1033">iPOS4803PE/S/SY CAT Microdrive</Name>
+				<URL>http://www.technosoftmotion.com</URL>
+				<Info>
+					<StateMachine>
+						<Timeout>
+							<PreopTimeout>2000</PreopTimeout>
+							<SafeopOpTimeout>9000</SafeopOpTimeout>
+							<BackToInitTimeout>5000</BackToInitTimeout>
+							<BackToSafeopTimeout>200</BackToSafeopTimeout>
+						</Timeout>
+					</StateMachine>
+					<Mailbox>
+						<Timeout>
+							<RequestTimeout>100</RequestTimeout>
+							<ResponseTimeout>20000</ResponseTimeout>
+						</Timeout>
+					</Mailbox>
+				</Info>
+				<GroupType>Servo Drive</GroupType>
+				<Profile>
+					<ChannelInfo>
+						<ProfileNo>402</ProfileNo>
+					</ChannelInfo>
+					<DictionaryFile>Technosoft.FA02E.Dict.xml</DictionaryFile>
+				</Profile>
+				<Fmmu>Outputs</Fmmu>
+				<Fmmu>Inputs</Fmmu>
+				<Fmmu>MBoxState</Fmmu>
+				<Sm MinSize="32" MaxSize="256" DefaultSize="128" StartAddress="#x1000" ControlByte="#x26" Enable="1">MBoxOut</Sm>
+				<Sm MinSize="32" MaxSize="256" DefaultSize="128" StartAddress="#x1400" ControlByte="#x22" Enable="1">MBoxIn</Sm>
+				<Sm DefaultSize="6" StartAddress="#x1800" ControlByte="#x64" Enable="1">Outputs</Sm>
+				<Sm DefaultSize="16" StartAddress="#x1c00" ControlByte="#x20" Enable="1">Inputs</Sm>
+				<RxPdo Fixed="false" Sm="2">
+					<Index>#x1600</Index>
+					<Name>Receive PDO 1 mapping parameters</Name>
+					<Entry>
+						<Index>#x6040</Index>
+						<SubIndex>0</SubIndex>
+						<BitLen>16</BitLen>
+						<Name>Controlword</Name>
+						<DataType>UINT</DataType>
+					</Entry>
+					<Entry>
+						<Index>#x607A</Index>
+						<SubIndex>0</SubIndex>
+						<BitLen>32</BitLen>
+						<Name>Target position</Name>
+						<DataType>DINT</DataType>
+					</Entry>
+				</RxPdo>
+				<RxPdo Fixed="false">
+					<Index>#x1601</Index>
+					<Name>Receive PDO 2 mapping parameters</Name>
+					<Entry>
+						<Index>#x60FE</Index>
+						<SubIndex>1</SubIndex>
+						<BitLen>32</BitLen>
+						<Name>Digital outputs - Physical outputs</Name>
+						<DataType>UDINT</DataType>
+					</Entry>
+					<Entry>
+						<Index>#x60FE</Index>
+						<SubIndex>2</SubIndex>
+						<BitLen>32</BitLen>
+						<Name>Digital outputs - Bit mask</Name>
+						<DataType>UDINT</DataType>
+					</Entry>
+				</RxPdo>
+				<RxPdo Fixed="false">
+					<Index>#x1602</Index>
+					<Name>Receive PDO 3 mapping parameters</Name>
+					<Entry>
+						<Index>#x6060</Index>
+						<SubIndex>0</SubIndex>
+						<BitLen>8</BitLen>
+						<Name>Modes of operation</Name>
+						<DataType>SINT</DataType>
+					</Entry>
+					<Entry>
+						<Index>#x6071</Index>
+						<SubIndex>0</SubIndex>
+						<BitLen>16</BitLen>
+						<Name>Target torque</Name>
+						<DataType>INT</DataType>
+					</Entry>
+				</RxPdo>
+				<RxPdo Fixed="false">
+					<Index>#x1603</Index>
+					<Name>Receive PDO 4 mapping parameters</Name>
+					<Entry>
+						<Index>#x6081</Index>
+						<SubIndex>0</SubIndex>
+						<BitLen>32</BitLen>
+						<Name>Profile velocity</Name>
+						<DataType>DINT</DataType>
+					</Entry>
+					<Entry>
+						<Index>#x6083</Index>
+						<SubIndex>0</SubIndex>
+						<BitLen>32</BitLen>
+						<Name>Profile acceleration</Name>
+						<DataType>DINT</DataType>
+					</Entry>
+				</RxPdo>
+				<TxPdo Fixed="false" Sm="3">
+					<Index>#x1A00</Index>
+					<Name>Transmit PDO 1 mapping parameters</Name>
+					<Entry>
+						<Index>#x6041</Index>
+						<SubIndex>0</SubIndex>
+						<BitLen>16</BitLen>
+						<Name>Statusword</Name>
+						<DataType>UINT</DataType>
+					</Entry>
+					<Entry>
+						<Index>#x6064</Index>
+						<SubIndex>0</SubIndex>
+						<BitLen>32</BitLen>
+						<Name>Position actual value</Name>
+						<DataType>DINT</DataType>
+					</Entry>
+					<Entry>
+						<Index>#x6077</Index>
+						<SubIndex>0</SubIndex>
+						<BitLen>16</BitLen>
+						<Name>Torque (current) actual value</Name>
+						<DataType>INT</DataType>
+					</Entry>
+				</TxPdo>
+				<TxPdo Fixed="false" Sm="3">
+					<Index>#x1A01</Index>
+					<Name>Transmit PDO 2 mapping parameters</Name>
+					<Entry>
+						<Index>#x60F4</Index>
+						<SubIndex>0</SubIndex>
+						<BitLen>32</BitLen>
+						<Name>Following error actual value</Name>
+						<DataType>DINT</DataType>
+					</Entry>
+					<Entry>
+						<Index>#x60FD</Index>
+						<SubIndex>0</SubIndex>
+						<BitLen>32</BitLen>
+						<Name>Digital inputs</Name>
+						<DataType>UDINT</DataType>
+					</Entry>
+				</TxPdo>
+				<TxPdo Fixed="false">
+					<Index>#x1A02</Index>
+					<Name>Transmit PDO 3 mapping parameters</Name>
+					<Entry>
+						<Index>#x606C</Index>
+						<SubIndex>0</SubIndex>
+						<BitLen>32</BitLen>
+						<Name>Velocity actual value</Name>
+						<DataType>DINT</DataType>
+					</Entry>
+				</TxPdo>
+				<TxPdo Fixed="false">
+					<Index>#x1A03</Index>
+					<Name>Transmit PDO 4 mapping parameters</Name>
+					<Entry>
+						<Index>#x6061</Index>
+						<SubIndex>0</SubIndex>
+						<BitLen>8</BitLen>
+						<Name>Modes of operation display</Name>
+						<DataType>SINT</DataType>
+					</Entry>
+				</TxPdo>
+				<Mailbox DataLinkLayer="true">
+					<EoE/>
+					<CoE SdoInfo="1" PdoAssign="1" PdoConfig="1" CompleteAccess="false" SegmentedSdo="1">
+						<InitCmd>
+							<Transition>PS</Transition>
+							<Index>#x6060</Index>
+							<SubIndex>0</SubIndex>
+							<Data>08</Data>
+							<Comment>Modes of Operation  = CSP</Comment>
+						</InitCmd>
+					</CoE>
+					<FoE/>
+				</Mailbox>
+				<Dc>
+					<OpMode>
+						<Name>DcSync</Name>
+						<Desc>DC-Synchron</Desc>
+						<AssignActivate>#x0330</AssignActivate>
+						<CycleTimeSync0 Factor="1">0</CycleTimeSync0>
+						<ShiftTimeSync0>0</ShiftTimeSync0>
+					</OpMode>
+					<OpMode>
+						<Name>Free</Name>
+						<Desc>DC unused (no sync)</Desc>
+						<AssignActivate>#x0000</AssignActivate>
+					</OpMode>
+				</Dc>
+				<ESC>
+					<Reg0410>19000</Reg0410>
+					<Reg0420>19000</Reg0420>
+				</ESC>
+				<Eeprom>
+					<ByteSize>2048</ByteSize>
+					<ConfigData>8004030EF40100000000</ConfigData>
+					<BootStrap>0010800000148000</BootStrap>
+				</Eeprom>
+				<Image16x14>DRIVE</Image16x14>
+			</Device>
+		</Devices>
+	</Descriptions>
+</EtherCATInfo>
