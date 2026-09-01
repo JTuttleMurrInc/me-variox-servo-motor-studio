@@ -1,7 +1,11 @@
 """
 CiA 402 Motion & Drive Control Tab.
+Full multi-mode motion engine for Profile Velocity (PV) and Profile Position (PP).
+Automatically bundles Target Velocity, Profile Velocity, Accel, Decel, and Setpoint Pulse.
 """
 
+import time
+import math
 import tkinter as tk
 from tkinter import ttk, messagebox
 from typing import Optional
@@ -15,44 +19,49 @@ from gui.theme import (
     COLOR_BG_SURFACE, COLOR_BG_CARD, COLOR_BG_INPUT, COLOR_BG_ACCENT,
     COLOR_TEXT_PRIMARY, COLOR_TEXT_MUTED, COLOR_MURR_LIME, COLOR_MURR_GREEN,
     COLOR_WARNING, COLOR_DANGER, FONT_TITLE, FONT_SECTION, FONT_SUBTITLE,
-    FONT_BODY_BOLD, FONT_MONO_BOLD, FONT_BADGE
+    FONT_BODY, FONT_BODY_BOLD, FONT_MONO, FONT_MONO_BOLD, FONT_BADGE
 )
 
 class MotionTab(tk.Frame):
-    """CiA 402 Motion Control, mode selection, jog, and setpoints."""
+    """CiA 402 Motion Control, mode selection, jog, and coordinated setpoints."""
 
     def __init__(self, parent, app, **kwargs):
         super().__init__(parent, bg=COLOR_BG_SURFACE, padx=16, pady=16, **kwargs)
         self.app = app
 
-        # Variables
+        # Motion Parameters
         self.var_mode = tk.StringVar(value=MODE_NAMES[3])
-        self.var_speed = tk.DoubleVar(value=0.0)
+        self.var_speed_rpm = tk.DoubleVar(value=0.0)
         self.var_pos = tk.IntVar(value=0)
-        self.var_rel_pos = tk.IntVar(value=10000)
+        
+        # Kinematic Limits (bundled with every motion command)
+        self.var_move_rpm = tk.IntVar(value=1000)          # 0x6081 Profile Velocity (RPM)
+        self.var_accel = tk.IntVar(value=150000)           # 0x6083 Profile Accel (inc/s²)
+        self.var_decel = tk.IntVar(value=150000)           # 0x6084 Profile Decel (inc/s²)
+        self.var_is_relative = tk.BooleanVar(value=False)  # Bit 6 in 0x6040
 
-        # 2-Column Layout
+        # Layout: 2 Columns
         content = tk.Frame(self, bg=COLOR_BG_SURFACE)
         content.pack(fill="both", expand=True)
 
-        col_left = tk.Frame(content, bg=COLOR_BG_SURFACE, width=460)
+        col_left = tk.Frame(content, bg=COLOR_BG_SURFACE, width=470)
         col_left.pack(side="left", fill="both", expand=True, padx=(0, 16))
         self._build_cia_panel(col_left)
 
-        col_right = tk.Frame(content, bg=COLOR_BG_SURFACE, width=460)
+        col_right = tk.Frame(content, bg=COLOR_BG_SURFACE, width=470)
         col_right.pack(side="left", fill="both", expand=True)
         self._build_motion_panel(col_right)
 
     def _build_cia_panel(self, parent):
         # 1. State Machine Card
-        card = tk.Frame(parent, bg=COLOR_BG_CARD, highlightbackground=COLOR_BG_ACCENT, highlightthickness=1, padx=16, pady=16)
-        card.pack(fill="x", pady=(0, 16))
+        card = tk.Frame(parent, bg=COLOR_BG_CARD, highlightbackground=COLOR_BG_ACCENT, highlightthickness=1, padx=16, pady=14)
+        card.pack(fill="x", pady=(0, 14))
 
         tk.Label(card, text="CiA 402 DRIVE STATE MACHINE", bg=COLOR_BG_CARD, fg=COLOR_MURR_LIME, font=FONT_TITLE).pack(anchor="w")
         
         # State Readout
-        state_box = tk.Frame(card, bg=COLOR_BG_INPUT, padx=12, pady=10)
-        state_box.pack(fill="x", pady=(10, 14))
+        state_box = tk.Frame(card, bg=COLOR_BG_INPUT, padx=12, pady=8)
+        state_box.pack(fill="x", pady=(8, 12))
 
         self.lbl_current_state = tk.Label(
             state_box, text="STATE: SWITCH ON DISABLED (0x0240)",
@@ -68,13 +77,13 @@ class MotionTab(tk.Frame):
 
         ttk.Button(seq_grid, text="1. Shutdown (0x0006)", style="Action.TButton", command=lambda: self.app.send_controlword(CMD_SHUTDOWN)).grid(row=0, column=0, sticky="ew", padx=2, pady=3)
         ttk.Button(seq_grid, text="2. Switch On (0x0007)", style="Action.TButton", command=lambda: self.app.send_controlword(CMD_SWITCH_ON)).grid(row=0, column=1, sticky="ew", padx=2, pady=3)
-        ttk.Button(seq_grid, text="3. Enable Op (0x000F)", style="Murr.TButton", command=lambda: self.app.send_controlword(CMD_ENABLE_OPERATION)).grid(row=1, column=0, columnspan=2, sticky="ew", padx=2, pady=3)
+        ttk.Button(seq_grid, text="3. Enable Op (0x000F)", style="Murr.TButton", command=self._full_enable_drive).grid(row=1, column=0, columnspan=2, sticky="ew", padx=2, pady=3)
         
         seq_grid.columnconfigure(0, weight=1)
         seq_grid.columnconfigure(1, weight=1)
 
-        # Interlock & Emergency Actions
-        tk.Label(card, text="Interlocks & Recovery:", bg=COLOR_BG_CARD, fg=COLOR_TEXT_MUTED, font=FONT_SUBTITLE).pack(anchor="w", pady=(12, 6))
+        # Interlocks & Emergency Actions
+        tk.Label(card, text="Interlocks & Recovery:", bg=COLOR_BG_CARD, fg=COLOR_TEXT_MUTED, font=FONT_SUBTITLE).pack(anchor="w", pady=(10, 6))
 
         rec_grid = tk.Frame(card, bg=COLOR_BG_CARD)
         rec_grid.pack(fill="x")
@@ -86,110 +95,186 @@ class MotionTab(tk.Frame):
         rec_grid.columnconfigure(0, weight=1)
         rec_grid.columnconfigure(1, weight=1)
 
-        # 2. Operating Mode Selector Card
-        mode_card = tk.Frame(parent, bg=COLOR_BG_CARD, highlightbackground=COLOR_BG_ACCENT, highlightthickness=1, padx=16, pady=16)
-        mode_card.pack(fill="both", expand=True)
+        # 2. Kinematics Profile Parameter Card (Accel, Decel, Speed)
+        kin_card = tk.Frame(parent, bg=COLOR_BG_CARD, highlightbackground=COLOR_BG_ACCENT, highlightthickness=1, padx=16, pady=14)
+        kin_card.pack(fill="both", expand=True)
 
-        tk.Label(mode_card, text="OPERATING MODE (0x6060 / 0x6061)", bg=COLOR_BG_CARD, fg=COLOR_MURR_LIME, font=FONT_TITLE).pack(anchor="w", pady=(0, 8))
+        tk.Label(kin_card, text="MOTION TRAJECTORY LIMITS", bg=COLOR_BG_CARD, fg=COLOR_MURR_LIME, font=FONT_TITLE).pack(anchor="w")
+        tk.Label(kin_card, text="Bundled automatically with velocity & position commands", bg=COLOR_BG_CARD, fg=COLOR_TEXT_MUTED, font=FONT_SUBTITLE).pack(anchor="w", pady=(0, 8))
 
-        modes_list = list(MODE_NAMES.values())
-        cb_mode = ttk.Combobox(mode_card, textvariable=self.var_mode, values=modes_list, state="readonly")
-        cb_mode.pack(fill="x", pady=(0, 8))
+        # Profile Velocity
+        row_v = tk.Frame(kin_card, bg=COLOR_BG_CARD)
+        row_v.pack(fill="x", pady=3)
+        tk.Label(row_v, text="Profile Move Velocity (0x6081):", bg=COLOR_BG_CARD, fg=COLOR_TEXT_PRIMARY, font=FONT_BODY_BOLD).pack(side="left")
+        tk.Label(row_v, text="RPM", bg=COLOR_BG_CARD, fg=COLOR_TEXT_MUTED, font=FONT_BADGE).pack(side="right")
+        ttk.Entry(row_v, textvariable=self.var_move_rpm, width=8, font=FONT_MONO_BOLD).pack(side="right", padx=6)
 
-        ttk.Button(mode_card, text="Set Mode of Operation (SDO 0x6060)", style="Action.TButton", command=self._apply_mode).pack(fill="x")
+        # Profile Acceleration
+        row_a = tk.Frame(kin_card, bg=COLOR_BG_CARD)
+        row_a.pack(fill="x", pady=3)
+        tk.Label(row_a, text="Profile Acceleration (0x6083):", bg=COLOR_BG_CARD, fg=COLOR_TEXT_PRIMARY, font=FONT_BODY_BOLD).pack(side="left")
+        tk.Label(row_a, text="inc/s²", bg=COLOR_BG_CARD, fg=COLOR_TEXT_MUTED, font=FONT_BADGE).pack(side="right")
+        ttk.Entry(row_a, textvariable=self.var_accel, width=8, font=FONT_MONO_BOLD).pack(side="right", padx=6)
+
+        # Profile Deceleration
+        row_d = tk.Frame(kin_card, bg=COLOR_BG_CARD)
+        row_d.pack(fill="x", pady=3)
+        tk.Label(row_d, text="Profile Deceleration (0x6084):", bg=COLOR_BG_CARD, fg=COLOR_TEXT_PRIMARY, font=FONT_BODY_BOLD).pack(side="left")
+        tk.Label(row_d, text="inc/s²", bg=COLOR_BG_CARD, fg=COLOR_TEXT_MUTED, font=FONT_BADGE).pack(side="right")
+        ttk.Entry(row_d, textvariable=self.var_decel, width=8, font=FONT_MONO_BOLD).pack(side="right", padx=6)
+
+        ttk.Button(kin_card, text="Flash Trajectory Limits to Motor (0x6081..84)", style="Action.TButton", command=self._flash_kinematics).pack(fill="x", pady=(10, 0))
 
     def _build_motion_panel(self, parent):
-        # Velocity Control Card
-        vel_card = tk.Frame(parent, bg=COLOR_BG_CARD, highlightbackground=COLOR_BG_ACCENT, highlightthickness=1, padx=16, pady=16)
-        vel_card.pack(fill="x", pady=(0, 16))
+        # Velocity / Jog Control Card
+        vel_card = tk.Frame(parent, bg=COLOR_BG_CARD, highlightbackground=COLOR_BG_ACCENT, highlightthickness=1, padx=16, pady=14)
+        vel_card.pack(fill="x", pady=(0, 14))
 
-        tk.Label(vel_card, text="VELOCITY COMMAND (0x60FF / RPM)", bg=COLOR_BG_CARD, fg=COLOR_MURR_LIME, font=FONT_TITLE).pack(anchor="w")
+        tk.Label(vel_card, text="VELOCITY / JOG COMMAND (0x60FF)", bg=COLOR_BG_CARD, fg=COLOR_MURR_LIME, font=FONT_TITLE).pack(anchor="w")
 
         # Slider
         slider = tk.Scale(
             vel_card, from_=-3000, to=3000, orient="horizontal",
-            variable=self.var_speed, command=lambda v: self._on_slider_speed(float(v)),
+            variable=self.var_speed_rpm, command=lambda v: self._on_slider_speed(float(v)),
             bg=COLOR_BG_CARD, fg=COLOR_TEXT_PRIMARY, troughcolor=COLOR_BG_INPUT,
-            highlightthickness=0, font=FONT_SUBTITLE, resolution=10
+            highlightthickness=0, font=FONT_SUBTITLE, resolution=25
         )
-        slider.pack(fill="x", pady=(8, 4))
+        slider.pack(fill="x", pady=(6, 4))
 
         # Speed Presets
         presets_frame = tk.Frame(vel_card, bg=COLOR_BG_CARD)
-        presets_frame.pack(fill="x", pady=4)
+        presets_frame.pack(fill="x", pady=3)
 
-        for rpm in [0, 100, 500, 1000, 1500, 3000]:
+        for rpm in [0, 100, 300, 600, 1200, 2500]:
             ttk.Button(presets_frame, text=f"{rpm}", style="Action.TButton", command=lambda r=rpm: self._set_speed(float(r))).pack(side="left", fill="x", expand=True, padx=2)
 
         # Jog Controls
-        jog_frame = tk.Frame(vel_card, bg=COLOR_BG_CARD, pady=6)
+        jog_frame = tk.Frame(vel_card, bg=COLOR_BG_CARD, pady=4)
         jog_frame.pack(fill="x")
 
-        ttk.Button(jog_frame, text="<<< JOG REV (-500 RPM)", style="Action.TButton", command=lambda: self._set_speed(-500.0)).pack(side="left", fill="x", expand=True, padx=(0, 4))
-        ttk.Button(jog_frame, text="STOP (0 RPM)", style="Danger.TButton", command=lambda: self._set_speed(0.0)).pack(side="left", fill="x", expand=True, padx=4)
-        ttk.Button(jog_frame, text="JOG FWD (+500 RPM) >>>", style="Action.TButton", command=lambda: self._set_speed(500.0)).pack(side="left", fill="x", expand=True, padx=(4, 0))
+        ttk.Button(jog_frame, text="⏪ JOG REV (-300 RPM)", style="Action.TButton", command=lambda: self._set_speed(-300.0)).pack(side="left", fill="x", expand=True, padx=(0, 4))
+        ttk.Button(jog_frame, text="⏹️ STOP (0 RPM)", style="Danger.TButton", command=lambda: self._set_speed(0.0)).pack(side="left", fill="x", expand=True, padx=4)
+        ttk.Button(jog_frame, text="JOG FWD (+300 RPM) ⏩", style="Action.TButton", command=lambda: self._set_speed(300.0)).pack(side="left", fill="x", expand=True, padx=(4, 0))
 
         # Position Control Card
-        pos_card = tk.Frame(parent, bg=COLOR_BG_CARD, highlightbackground=COLOR_BG_ACCENT, highlightthickness=1, padx=16, pady=16)
+        pos_card = tk.Frame(parent, bg=COLOR_BG_CARD, highlightbackground=COLOR_BG_ACCENT, highlightthickness=1, padx=16, pady=14)
         pos_card.pack(fill="both", expand=True)
 
-        tk.Label(pos_card, text="POSITION COMMAND (0x607A / Counts)", bg=COLOR_BG_CARD, fg=COLOR_MURR_LIME, font=FONT_TITLE).pack(anchor="w")
+        tk.Label(pos_card, text="POSITION SETPOINT COMMAND (0x607A)", bg=COLOR_BG_CARD, fg=COLOR_MURR_LIME, font=FONT_TITLE).pack(anchor="w")
+        tk.Label(pos_card, text="Coordinates in Encoder Counts (65,536 inc = 1 Revolution)", bg=COLOR_BG_CARD, fg=COLOR_TEXT_MUTED, font=FONT_SUBTITLE).pack(anchor="w", pady=(0, 6))
 
-        p_box = tk.Frame(pos_card, bg=COLOR_BG_CARD, pady=8)
+        p_box = tk.Frame(pos_card, bg=COLOR_BG_CARD, pady=4)
         p_box.pack(fill="x")
 
-        tk.Label(p_box, text="Target Position:", bg=COLOR_BG_CARD, fg=COLOR_TEXT_PRIMARY, font=FONT_BODY_BOLD).pack(side="left", padx=(0, 8))
-        ttk.Entry(p_box, textvariable=self.var_pos, font=FONT_MONO_BOLD, width=14).pack(side="left", padx=(0, 8))
-        ttk.Button(p_box, text="Move to Position", style="Murr.TButton", command=self._apply_position).pack(side="left")
+        tk.Label(p_box, text="Target Pos:", bg=COLOR_BG_CARD, fg=COLOR_TEXT_PRIMARY, font=FONT_BODY_BOLD).pack(side="left", padx=(0, 8))
+        ttk.Entry(p_box, textvariable=self.var_pos, font=FONT_MONO_BOLD, width=12).pack(side="left", padx=(0, 8))
+        
+        chk_rel = tk.Checkbutton(
+            p_box, text="Relative Move", variable=self.var_is_relative,
+            bg=COLOR_BG_CARD, fg=COLOR_TEXT_PRIMARY, activebackground=COLOR_BG_CARD,
+            activeforeground=COLOR_MURR_LIME, selectcolor=COLOR_BG_INPUT, font=FONT_BODY_BOLD
+        )
+        chk_rel.pack(side="left", padx=(0, 8))
 
-        # Relative delta buttons
-        rel_frame = tk.Frame(pos_card, bg=COLOR_BG_CARD, pady=6)
+        ttk.Button(p_box, text="🚀 Execute Move", style="Murr.TButton", command=self._apply_position).pack(side="left")
+
+        # Relative delta step buttons (revolutions)
+        tk.Label(pos_card, text="Quick Step Increments:", bg=COLOR_BG_CARD, fg=COLOR_TEXT_MUTED, font=FONT_BADGE).pack(anchor="w", pady=(8, 2))
+        rel_frame = tk.Frame(pos_card, bg=COLOR_BG_CARD)
         rel_frame.pack(fill="x")
 
-        ttk.Button(rel_frame, text="-50,000", style="Action.TButton", command=lambda: self._rel_move(-50000)).pack(side="left", fill="x", expand=True, padx=2)
-        ttk.Button(rel_frame, text="-10,000", style="Action.TButton", command=lambda: self._rel_move(-10000)).pack(side="left", fill="x", expand=True, padx=2)
-        ttk.Button(rel_frame, text="+10,000", style="Action.TButton", command=lambda: self._rel_move(10000)).pack(side="left", fill="x", expand=True, padx=2)
-        ttk.Button(rel_frame, text="+50,000", style="Action.TButton", command=lambda: self._rel_move(50000)).pack(side="left", fill="x", expand=True, padx=2)
+        ttk.Button(rel_frame, text="-1 Rev (-65k)", style="Action.TButton", command=lambda: self._rel_move(-65536)).pack(side="left", fill="x", expand=True, padx=2)
+        ttk.Button(rel_frame, text="-90° (-16k)", style="Action.TButton", command=lambda: self._rel_move(-16384)).pack(side="left", fill="x", expand=True, padx=2)
+        ttk.Button(rel_frame, text="+90° (+16k)", style="Action.TButton", command=lambda: self._rel_move(16384)).pack(side="left", fill="x", expand=True, padx=2)
+        ttk.Button(rel_frame, text="+1 Rev (+65k)", style="Action.TButton", command=lambda: self._rel_move(65536)).pack(side="left", fill="x", expand=True, padx=2)
 
-    def _apply_mode(self):
-        mode_str = self.var_mode.get()
-        mode_val = 3
-        for k, v in MODE_NAMES.items():
-            if v == mode_str:
-                mode_val = k
-                break
-        data = int(mode_val).to_bytes(1, 'little', signed=True)
-        err = self.app.sdo_write(0x6060, 0x00, data)
-        if err:
-            messagebox.showerror("Mode Switch Failed", f"Error setting Mode 0x6060:\n{err}")
-        else:
-            self.app.log(f"Set Mode of Operation: {mode_str} ({mode_val})")
+    def _full_enable_drive(self):
+        """Standard Drive Enable sequence with mode and trajectory limits initialized."""
+        # 1. Switch Mode to Profile Velocity (3)
+        self.app.sdo_write(0x6060, 0x00, (3).to_bytes(1, 'little', signed=True))
+        
+        # 2. Write Profile Accel and Decel
+        self._flash_kinematics()
+
+        # 3. CiA 402 Enable Sequence: 0x06 -> 0x07 -> 0x0F
+        self.app.send_controlword(CMD_SHUTDOWN)
+        self.after(40, lambda: self.app.send_controlword(CMD_SWITCH_ON))
+        self.after(80, lambda: self.app.send_controlword(CMD_ENABLE_OPERATION))
+        self.app.log("Full Drive Enable initiated (Mode 3, Accel/Decel loaded, Controlword 0x000F).")
+
+    def _flash_kinematics(self):
+        """Flashing 0x6081 (Profile Velocity), 0x6083 (Accel), 0x6084 (Decel)."""
+        rpm = self.var_move_rpm.get()
+        vel_inc_s = int(round(rpm * 65536.0 / 60.0))
+        accel = int(self.var_accel.get())
+        decel = int(self.var_decel.get())
+
+        self.app.sdo_write(0x6081, 0x00, vel_inc_s.to_bytes(4, 'little'))
+        self.app.sdo_write(0x6083, 0x00, accel.to_bytes(4, 'little'))
+        self.app.sdo_write(0x6084, 0x00, decel.to_bytes(4, 'little'))
+        self.app.log(f"Configured Motion Trajectory: Profile Vel={rpm} RPM ({vel_inc_s} inc/s), Acc={accel}, Dec={decel}")
 
     def _on_slider_speed(self, val: float):
         self._send_speed(val)
 
     def _set_speed(self, val: float):
-        self.var_speed.set(val)
+        self.var_speed_rpm.set(val)
         self._send_speed(val)
 
     def _send_speed(self, val: float):
-        rpm_int = int(val)
-        data = rpm_int.to_bytes(4, 'little', signed=True)
-        self.app.sdo_write(0x60FF, 0x00, data)
+        """Commands Target Velocity (0x60FF) bundled with Mode 3 and Accel/Decel limits."""
+        # 1. Ensure Mode is Profile Velocity (Mode 3)
+        self.app.sdo_write(0x6060, 0x00, (3).to_bytes(1, 'little', signed=True))
+        
+        # 2. Convert RPM to increments/second (65536 inc = 1 rev)
+        vel_inc_s = int(round(val * 65536.0 / 60.0))
+        
+        # 3. Write Profile Limits
+        accel = int(self.var_accel.get())
+        decel = int(self.var_decel.get())
+        self.app.sdo_write(0x6083, 0x00, accel.to_bytes(4, 'little'))
+        self.app.sdo_write(0x6084, 0x00, decel.to_bytes(4, 'little'))
+
+        # 4. Write Target Velocity
+        self.app.sdo_write(0x60FF, 0x00, vel_inc_s.to_bytes(4, 'little', signed=True))
+        
+        # 5. Ensure Controlword is Operation Enabled
+        self.app.send_controlword(CMD_ENABLE_OPERATION)
+        self.app.log(f"Commanded Velocity: {val:.1f} RPM ({vel_inc_s} inc/s)")
 
     def _apply_position(self):
+        """Commands Target Position (0x607A) bundled with Mode 1, Velocity, Accel, Decel, and Setpoint Pulse."""
         pos = self.var_pos.get()
-        data = int(pos).to_bytes(4, 'little', signed=True)
-        err = self.app.sdo_write(0x607A, 0x00, data)
-        if not err:
-            # Trigger position move (Controlword bit 4)
-            self.app.send_controlword(0x003F)
-            self.app.log(f"Target Position commanded: {pos} counts")
+        is_rel = self.var_is_relative.get()
+        
+        # 1. Switch to Profile Position Mode (Mode 1)
+        self.app.sdo_write(0x6060, 0x00, (1).to_bytes(1, 'little', signed=True))
+
+        # 2. Write Profile Velocity (0x6081), Accel (0x6083), Decel (0x6084)
+        rpm = self.var_move_rpm.get()
+        vel_inc_s = int(round(rpm * 65536.0 / 60.0))
+        accel = int(self.var_accel.get())
+        decel = int(self.var_decel.get())
+
+        self.app.sdo_write(0x6081, 0x00, vel_inc_s.to_bytes(4, 'little'))
+        self.app.sdo_write(0x6083, 0x00, accel.to_bytes(4, 'little'))
+        self.app.sdo_write(0x6084, 0x00, decel.to_bytes(4, 'little'))
+
+        # 3. Write Target Position (0x607A)
+        self.app.sdo_write(0x607A, 0x00, int(pos).to_bytes(4, 'little', signed=True))
+
+        # 4. Trigger Setpoint Pulse (0x000F -> 0x003F for Immediate Absolute, or 0x007F for Immediate Relative)
+        cw_cmd = 0x007F if is_rel else 0x003F
+        self.app.send_controlword(0x000F) # Clear bit 4
+        self.after(30, lambda: self.app.send_controlword(cw_cmd)) # Rising edge on bit 4
+        
+        mode_tag = "RELATIVE" if is_rel else "ABSOLUTE"
+        self.app.log(f"Position Move Triggered ({mode_tag}): Target={pos:,d} counts @ {rpm} RPM (Accel={accel}, Decel={decel})")
 
     def _rel_move(self, delta: int):
-        curr_pos = self.app.current_telemetry.position_actual if self.app.current_telemetry else 0
-        new_pos = curr_pos + delta
-        self.var_pos.set(new_pos)
+        """Relative step increment."""
+        self.var_is_relative.set(True)
+        self.var_pos.set(delta)
         self._apply_position()
 
     def update_telemetry(self, t: MotorTelemetry):

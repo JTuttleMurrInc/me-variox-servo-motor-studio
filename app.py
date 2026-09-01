@@ -294,10 +294,18 @@ class VarioXMotorStudioApp:
                 self.ecat_master.live_telemetry.led_config = cfg
 
     def action_enable_drive(self):
+        # 1. Pre-initialize Mode of Operation to Profile Velocity (Mode 3)
+        self.sdo_write(0x6060, 0x00, (3).to_bytes(1, 'little', signed=True))
+        # 2. Pre-initialize Profile Velocity, Accel & Decel
+        self.sdo_write(0x6081, 0x00, (1092266).to_bytes(4, 'little')) # 1000 RPM
+        self.sdo_write(0x6083, 0x00, (150000).to_bytes(4, 'little'))
+        self.sdo_write(0x6084, 0x00, (150000).to_bytes(4, 'little'))
+        
+        # 3. CiA 402 Enable Sequence: 0x06 -> 0x07 -> 0x0F
         self.send_controlword(CMD_SHUTDOWN)
         self.root.after(40, lambda: self.send_controlword(CMD_SWITCH_ON))
         self.root.after(80, lambda: self.send_controlword(CMD_ENABLE_OPERATION))
-        self.log("Initiated Drive Enable Sequence (0x06 -> 0x07 -> 0x0F).")
+        self.log("Initiated Drive Enable Sequence (Mode 3, Accel/Decel loaded, 0x06 -> 0x07 -> 0x0F).")
 
     def action_disable_drive(self):
         self.send_controlword(CMD_DISABLE_VOLTAGE)
