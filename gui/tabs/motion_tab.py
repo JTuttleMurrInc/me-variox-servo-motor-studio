@@ -623,7 +623,7 @@ class MotionTab(tk.Frame):
             (0.25, "Indexing Station 3 (180° → 270°)", 0x80080004),
             (0.25, "Indexing Station 4 (270° → 360° / Home)", 0x80080002),
         ]
-        self._require_safety_acknowledgment(lambda: self._start_routine_thread("🎡 4x90° Indexing Turntable (Dwell Carousel)", steps, target_rpm=1500, accel=180000, dwell_s=0.8))
+        self._require_safety_acknowledgment(lambda: self._start_routine_thread("🎡 4x90° Indexing Turntable (Dwell Carousel)", steps, target_rpm=1500, accel=180000, dwell_s=0.08))
 
     def _start_routine_thread(self, name: str, steps: List[Tuple[float, str, int]], target_rpm: int = 4000, accel: int = 200000, dwell_s: float = 0.08):
         def _worker():
@@ -670,11 +670,7 @@ class MotionTab(tk.Frame):
                     # Phase 4: Instant simultaneous rising-edge trigger across ALL target drives in a SINGLE packet
                     self.app.send_controlwords_simultaneous({addr: 0x007F for addr, _ in targets})
 
-                    # Calculate true kinematic trapezoidal move time (Accel + Cruise + Decel + Settling margin)
-                    accel_time_s = (target_rpm / 60.0) / max(0.1, (accel / float(ENCODER_COUNTS_PER_REV)))
-                    cruise_time_s = abs(rev_delta) / max(1.0, (target_rpm / 60.0))
-                    move_time_s = max(0.40, (2.0 * accel_time_s) + cruise_time_s + 0.18)
-
+                    move_time_s = (abs(rev_delta) / (target_rpm / 60.0)) + 0.12
                     deadline = time.time() + move_time_s
                     while time.time() < deadline:
                         if self._routine_stop_event.is_set():

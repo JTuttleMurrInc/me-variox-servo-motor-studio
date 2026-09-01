@@ -291,42 +291,24 @@ class EthercatMaster:
             # WKC=1 was accepted by SM0
             return None
 
-    def sdo_download_simultaneous(self, writes: List[Tuple[int, int, int, bytes]], timeout_s: float = 0.25) -> bool:
+    def sdo_download_simultaneous(self, writes: List[Tuple[int, int, int, bytes]]) -> bool:
         """
         Dispatches multiple SDO Downloads to multiple slaves simultaneously
-        packaged within a SINGLE multi-datagram Ethernet packet and verifies execution.
+        packaged within a SINGLE multi-datagram Ethernet packet.
         """
         with self._sdo_lock:
             fpwr_items = []
-            target_slaves = []
             for station_addr, idx, sub, val_bytes in writes:
                 slave = next((s for s in self.slaves if s.configured_addr == station_addr), None)
                 if slave:
                     mbx_payload = self._build_coe_download_payload(slave, idx, sub, val_bytes)
                     fpwr_items.append((station_addr, slave.mailbox.sm0_addr, mbx_payload))
-                    target_slaves.append(slave)
             
             if not fpwr_items:
                 return False
 
             total_wkc = self.raw.fpwr_multi(fpwr_items)
-            if total_wkc == 0:
-                # Retry individual writes if mailbox was temporarily full
-                for s_addr, idx, sub, val_bytes in writes:
-                    self.sdo_download(s_addr, idx, sub, val_bytes)
-                return True
-
-            # Allow drive MCU to process and poll ACKs
-            time.sleep(0.015)
-            for slave in target_slaves:
-                deadline = time.time() + timeout_s
-                while time.time() < deadline:
-                    resp, rw = self.raw.fprd(slave.configured_addr, slave.mailbox.sm1_addr, slave.mailbox.sm1_len)
-                    if rw > 0 and len(resp) >= 12:
-                        break
-                    time.sleep(0.005)
-
-            return True
+            return total_wkc >= len(fpwr_items)
 
     def send_controlwords_simultaneous(self, cw_by_addr: Dict[int, int]) -> bool:
         """
