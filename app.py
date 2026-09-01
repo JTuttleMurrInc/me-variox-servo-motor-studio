@@ -8,7 +8,7 @@ import os
 import time
 import tkinter as tk
 from tkinter import ttk, messagebox
-from typing import Optional, Dict
+from typing import Optional, Dict, List, Tuple
 from PIL import Image, ImageTk
 
 from core.esi_parser import EsiParser
@@ -290,6 +290,24 @@ class VarioXMotorStudioApp:
             return self.virtual_multi.sdo_write(station_addr, index, sub_index, data)
         else:
             return self.ecat_master.sdo_download(station_addr, index, sub_index, data)
+
+    def sdo_write_simultaneous(self, writes: List[Tuple[int, int, int, bytes]]):
+        """Dispatches multiple SDO writes to multiple slaves in a SINGLE Ethernet frame."""
+        if not writes:
+            return
+        if self.is_simulation:
+            self.virtual_multi.sdo_download_simultaneous(writes)
+        elif self.ecat_master and self.is_hardware_connected:
+            self.ecat_master.sdo_download_simultaneous(writes)
+
+    def send_controlwords_simultaneous(self, cw_by_addr: Dict[int, int]):
+        """Dispatches controlwords to multiple slaves in a SINGLE Ethernet frame."""
+        if not cw_by_addr:
+            return
+        if self.is_simulation:
+            self.virtual_multi.send_controlwords_simultaneous(cw_by_addr)
+        elif self.ecat_master and self.is_hardware_connected:
+            self.ecat_master.send_controlwords_simultaneous(cw_by_addr)
 
     def apply_led_config(self, cfg: LedRingConfig, station_addr: Optional[int] = None):
         """Applies LED configuration to specified slave, or broadcasts to all slaves if station_addr is None."""

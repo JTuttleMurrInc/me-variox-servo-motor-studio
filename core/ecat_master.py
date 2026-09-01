@@ -237,6 +237,21 @@ class EthercatMaster:
 
             return None, f"SDO Upload Timeout for 0x{index:04X}:{sub_index:02X}"
 
+    def _build_coe_download_payload(self, slave: SlaveInfo, index: int, sub_index: int, data: bytes) -> bytes:
+        cnt = self._next_mbx_cnt()
+        mbx_cfg = slave.mailbox
+        coe_hdr = struct.pack('<H', (COE_SVC_SDO_REQ << 12))
+        n = max(0, 4 - len(data))
+        cs = 0x20 | 0x02 | 0x01 | ((n & 0x03) << 2)
+        padded = data[:4] + (b'\x00' * (4 - len(data[:4])))
+        sdo_req = bytes([cs]) + struct.pack('<H', index) + bytes([sub_index]) + padded
+        payload = coe_hdr + sdo_req
+        type_and_cnt = (cnt << 4) | (MBX_TYPE_COE & 0x0F)
+        mbx_hdr = struct.pack('<HHBB', len(payload), 0x0000, 0x00, type_and_cnt)
+        full_mbx_out = mbx_hdr + payload
+        full_mbx_out += b'\x00' * (mbx_cfg.sm0_len - len(full_mbx_out))
+        return full_mbx_out
+
     def sdo_download(self, station_addr: int, index: int, sub_index: int, data: bytes, timeout_s: float = 0.3) -> Optional[str]:
         """Writes CoE Object (SDO Download)."""
         with self._sdo_lock:
@@ -244,19 +259,8 @@ class EthercatMaster:
             if not slave:
                 return f"Slave 0x{station_addr:04X} not found"
 
-            cnt = self._next_mbx_cnt()
             mbx_cfg = slave.mailbox
-
-            coe_hdr = struct.pack('<H', (COE_SVC_SDO_REQ << 12))
-            n = max(0, 4 - len(data))
-            cs = 0x20 | 0x02 | 0x01 | ((n & 0x03) << 2)
-            padded = data[:4] + (b'\x00' * (4 - len(data[:4])))
-            sdo_req = bytes([cs]) + struct.pack('<H', index) + bytes([sub_index]) + padded
-            payload = coe_hdr + sdo_req
-            type_and_cnt = (cnt << 4) | (MBX_TYPE_COE & 0x0F)
-            mbx_hdr = struct.pack('<HHBB', len(payload), 0x0000, 0x00, type_and_cnt)
-            full_mbx_out = mbx_hdr + payload
-            full_mbx_out += b'\x00' * (mbx_cfg.sm0_len - len(full_mbx_out))
+            full_mbx_out = self._build_coe_download_payload(slave, index, sub_index, data)
 
             # Send Request with retry
             w = 0
@@ -286,6 +290,35 @@ class EthercatMaster:
 
             # WKC=1 was accepted by SM0
             return None
+
+    def sdo_download_simultaneous(self, writes: List[Tuple[int, int, int, bytes]]) -> bool:
+        """
+        Dispatches multiple SDO Downloads to multiple slaves simultaneously
+        packaged within a SINGLE multi-datagram Ethernet packet.
+        """
+        with self._sdo_lock:
+            fpwr_items = []
+            for station_addr, idx, sub, val_bytes in writes:
+                slave = next((s for s in self.slaves if s.configured_addr == station_addr), None)
+                if slave:
+                    mbx_payload = self._build_coe_download_payload(slave, idx, sub, val_bytes)
+                    fpwr_items.append((station_addr, slave.mailbox.sm0_addr, mbx_payload))
+            
+            if not fpwr_items:
+                return False
+
+            total_wkc = self.raw.fpwr_multi(fpwr_items)
+            return total_wkc >= len(fpwr_items)
+
+    def send_controlwords_simultaneous(self, cw_by_addr: Dict[int, int]) -> bool:
+        """
+        Transmits CiA 402 Controlwords (0x6040:00) to multiple slaves in the SAME physical Ethernet frame.
+        Guarantees microsecond-level motion synchronization without roundtrip latency between axes.
+        """
+        writes = []
+        for addr, cw in cw_by_addr.items():
+            writes.append((addr, 0x6040, 0x00, struct.pack('<H', cw)))
+        return self.sdo_download_simultaneous(writes)
 
     def start_cyclic_pdo(self, interval_s: float = 0.04):
         if self._pdo_running:

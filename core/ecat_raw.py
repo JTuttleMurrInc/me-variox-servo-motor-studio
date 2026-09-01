@@ -343,3 +343,18 @@ class RawEthercatMaster:
         if res:
             return res[0].wkc
         return 0
+
+    def fpwr_multi(self, writes: List[Tuple[int, int, bytes]]) -> int:
+        """
+        Configured Address Physical Write across multiple target slaves
+        packaged within a SINGLE multi-datagram Ethernet packet.
+        """
+        if not writes:
+            return 0
+        datagrams = []
+        for station_addr, ado, data in writes:
+            idx = self._next_idx()
+            datagrams.append(Datagram(cmd=CMD_FPWR, idx=idx, adp=station_addr & 0xFFFF, ado=ado, data=data, wkc=0))
+        res = self.transact(datagrams)
+        total_wkc = sum(r.wkc for r in res) if res else 0
+        return total_wkc

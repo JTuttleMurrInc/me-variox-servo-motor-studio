@@ -7,7 +7,7 @@ CiA 402 state machine transitions, LED Ring status synthesis, and CoE SDO/PDO em
 import time
 import math
 import threading
-from typing import Dict, Tuple, Optional, Callable
+from typing import Dict, Tuple, List, Optional, Callable
 
 from core.motor_device import (
     Cia402State, OperationMode, MotorTelemetry, decode_cia402_state,
@@ -303,9 +303,15 @@ class VirtualMultiAxisDrive:
     def set_controlword(self, station_addr: int, cw: int):
         self.get_motor(station_addr).set_controlword(cw)
 
-    def set_controlword_all(self, cw: int):
-        for m in self.motors.values():
-            m.set_controlword(cw)
+    def sdo_download_simultaneous(self, writes: List[Tuple[int, int, int, bytes]]) -> bool:
+        for addr, idx, sub, data in writes:
+            self.get_motor(addr).sdo_write(idx, sub, data)
+        return True
+
+    def send_controlwords_simultaneous(self, cw_by_addr: Dict[int, int]) -> bool:
+        for addr, cw in cw_by_addr.items():
+            self.get_motor(addr).set_controlword(cw)
+        return True
 
     def stop(self):
         for m in self.motors.values():
