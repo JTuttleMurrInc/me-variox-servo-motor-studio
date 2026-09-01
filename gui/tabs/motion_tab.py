@@ -178,30 +178,33 @@ class MotionTab(tk.Frame):
 
         # Main Highlighted Routine: 4,000 RPM Harmonic Reversing Sweep
         btn_sweep = tk.Button(
-            card, text="🌀 Run 4,000 RPM Harmonic Reversing Sweep (4→2→1→0.5→0.25 Rev)",
+            card, text="🌀 4,000 RPM Harmonic Reversing Sweep (4→2→1→0.5→0.25 Rev)",
             bg="#103622", fg=COLOR_MURR_LIME, activebackground=COLOR_MURR_GREEN, activeforeground=COLOR_BG_DARK,
-            font=FONT_BODY_BOLD, anchor="w", padx=10, pady=8, relief="flat",
+            font=FONT_BODY_BOLD, anchor="w", padx=10, pady=7, relief="flat",
             highlightbackground=COLOR_MURR_LIME, highlightthickness=1,
             command=self.start_harmonic_sweep_routine
         )
-        btn_sweep.pack(fill="x", pady=(0, 6))
+        btn_sweep.pack(fill="x", pady=(0, 4))
 
-        # Secondary Choreography Routines Grid
+        # Secondary Choreography Routines Grid (2 columns x 3 rows)
         r_grid = tk.Frame(card, bg=COLOR_BG_CARD)
         r_grid.pack(fill="x", pady=2)
 
-        btn_tacho = ttk.Button(r_grid, text="⚡ 0→4000 RPM Tacho Ramp", style="Action.TButton", command=self.start_tachometer_ramp_routine)
-        btn_tacho.grid(row=0, column=0, sticky="ew", padx=2, pady=2)
+        ttk.Button(r_grid, text="⚡ 0→4000 RPM Tacho Ramp", style="Action.TButton", command=self.start_tachometer_ramp_routine).grid(row=0, column=0, sticky="ew", padx=2, pady=2)
+        ttk.Button(r_grid, text="🎡 4x90° Indexing Turntable", style="Action.TButton", command=self.start_turntable_routine).grid(row=0, column=1, sticky="ew", padx=2, pady=2)
+        
+        ttk.Button(r_grid, text="📦 High-Speed Pick & Place Gantry", style="Action.TButton", command=self.start_pick_and_place_routine).grid(row=1, column=0, sticky="ew", padx=2, pady=2)
+        ttk.Button(r_grid, text="⚙️ Rotary Flying Knife (4000 RPM)", style="Action.TButton", command=self.start_flying_shear_routine).grid(row=1, column=1, sticky="ew", padx=2, pady=2)
 
-        btn_turntable = ttk.Button(r_grid, text="🎡 4x90° Indexing Turntable", style="Action.TButton", command=self.start_turntable_routine)
-        btn_turntable.grid(row=0, column=1, sticky="ew", padx=2, pady=2)
+        ttk.Button(r_grid, text="🎯 Micro-Stepping Stiffness Test", style="Action.TButton", command=self.start_micro_precision_routine).grid(row=2, column=0, sticky="ew", padx=2, pady=2)
+        ttk.Button(r_grid, text="🪞 Mirrored Synchronous Ballet", style="Action.TButton", command=self.start_dual_ballet_routine).grid(row=2, column=1, sticky="ew", padx=2, pady=2)
 
         r_grid.columnconfigure(0, weight=1)
         r_grid.columnconfigure(1, weight=1)
 
         # Routine Status Readout & Progress Bar
-        status_box = tk.Frame(card, bg=COLOR_BG_INPUT, padx=10, pady=8)
-        status_box.pack(fill="x", pady=(8, 4))
+        status_box = tk.Frame(card, bg=COLOR_BG_INPUT, padx=10, pady=6)
+        status_box.pack(fill="x", pady=(6, 4))
 
         tk.Label(status_box, textvariable=self.var_routine_name, bg=COLOR_BG_INPUT, fg="#38BDF8", font=FONT_BODY_BOLD).pack(anchor="w")
         tk.Label(status_box, textvariable=self.var_routine_step, bg=COLOR_BG_INPUT, fg=COLOR_TEXT_MUTED, font=FONT_BADGE).pack(anchor="w", pady=(2, 4))
@@ -608,6 +611,75 @@ class MotionTab(tk.Frame):
             (0.25, "Indexing Station 4 (270° → 360° / Home)", 0x80080002),
         ]
         self._require_safety_acknowledgment(lambda: self._start_routine_thread("🎡 4x90° Indexing Turntable (Dwell Carousel)", steps, target_rpm=1500, accel=180000, dwell_s=0.08))
+
+    def start_pick_and_place_routine(self):
+        steps = [
+            (2.0, "Traverse to Pick Station (+2.0 Rev)", 0x80080007),
+            (0.0, "Gripper Engage & Dwell (0.15s)", 0x800B0002),
+            (-4.0, "High-Speed Gantry Transfer to Place (-4.0 Rev)", 0x80080005),
+            (0.0, "Gripper Release & Place Dwell (0.15s)", 0x800B0002),
+            (2.0, "Return to Home Datum (+2.0 Rev)", 0x80080003),
+            
+            (2.0, "Cycle 2: Traverse to Pick Station (+2.0 Rev)", 0x80080007),
+            (0.0, "Cycle 2: Gripper Engage & Dwell", 0x800B0002),
+            (-4.0, "Cycle 2: Transfer to Place (-4.0 Rev)", 0x80080005),
+            (0.0, "Cycle 2: Gripper Release & Dwell", 0x800B0002),
+            (2.0, "Cycle 2: Return to Home Datum (+2.0 Rev)", 0x80080003),
+        ]
+        self._require_safety_acknowledgment(lambda: self._start_routine_thread("📦 High-Speed Pick & Place Gantry", steps, target_rpm=3800, accel=240000, dwell_s=0.12))
+
+    def start_flying_shear_routine(self):
+        steps = [
+            (1.0, "Cycle 1: Infeed Sync Traverse (+1.0 Rev)", 0x80080003),
+            (0.5, "Cycle 1: High-Speed Flying Cut (+0.5 Rev @ 4000 RPM)", 0x80040050),
+            (1.5, "Cycle 1: Outfeed Clear (+1.5 Rev)", 0x80080008),
+            
+            (1.0, "Cycle 2: Infeed Sync Traverse (+1.0 Rev)", 0x80080003),
+            (0.5, "Cycle 2: High-Speed Flying Cut (+0.5 Rev @ 4000 RPM)", 0x80040050),
+            (1.5, "Cycle 2: Outfeed Clear (+1.5 Rev)", 0x80080008),
+
+            (1.0, "Cycle 3: Infeed Sync Traverse (+1.0 Rev)", 0x80080003),
+            (0.5, "Cycle 3: High-Speed Flying Cut (+0.5 Rev @ 4000 RPM)", 0x80040050),
+            (1.5, "Cycle 3: Outfeed Clear (+1.5 Rev)", 0x80080008),
+
+            (1.0, "Cycle 4: Infeed Sync Traverse (+1.0 Rev)", 0x80080003),
+            (0.5, "Cycle 4: High-Speed Flying Cut (+0.5 Rev @ 4000 RPM)", 0x80040050),
+            (1.5, "Cycle 4: Outfeed Clear (+1.5 Rev)", 0x80080008),
+        ]
+        self._require_safety_acknowledgment(lambda: self._start_routine_thread("⚙️ Rotary Flying Knife (4000 RPM)", steps, target_rpm=4000, accel=280000, dwell_s=0.04))
+
+    def start_micro_precision_routine(self):
+        steps = [
+            (0.05, "Step 1: +18.0° Micro-Increment", 0x80080004),
+            (-0.05, "Step 2: -18.0° Micro-Return", 0x80080006),
+            (0.02, "Step 3: +7.20° Sub-Degree Position", 0x80080008),
+            (-0.02, "Step 4: -7.20° Sub-Degree Return", 0x80080008),
+            (0.005, "Step 5: +1.80° Precision Vernier Step", 0x80080001),
+            (-0.005, "Step 6: -1.80° Precision Vernier Return", 0x80080001),
+            
+            (0.01, "Stiffness Dither #1 (+3.6°)", 0x800B000D),
+            (-0.01, "Stiffness Dither #1 (-3.6°)", 0x800B000D),
+            (0.01, "Stiffness Dither #2 (+3.6°)", 0x800B000D),
+            (-0.01, "Stiffness Dither #2 (-3.6°)", 0x800B000D),
+            (0.01, "Stiffness Dither #3 (+3.6°)", 0x800B000D),
+            (-0.01, "Stiffness Dither #3 (-3.6°)", 0x800B000D),
+            (0.01, "Stiffness Dither #4 (+3.6°)", 0x800B000D),
+            (-0.01, "Stiffness Dither #4 (-3.6°)", 0x800B000D),
+        ]
+        self._require_safety_acknowledgment(lambda: self._start_routine_thread("🎯 Micro-Stepping Stiffness Test", steps, target_rpm=2500, accel=300000, dwell_s=0.04))
+
+    def start_dual_ballet_routine(self):
+        steps = [
+            (3.0, "Dual Mirror Phase 1: Opposing Full 3-Turn (+3 / -3 Rev)", 0x80080004),
+            (-3.0, "Dual Mirror Phase 2: Opposing Reverse (-3 / +3 Rev)", 0x80080006),
+            (1.5, "Dual Mirror Phase 3: Synchronized 1.5-Turn Pirouette", 0x80080008),
+            (-1.5, "Dual Mirror Phase 4: Synchronized 1.5-Turn Counter", 0x80080005),
+            (0.75, "Dual Mirror Phase 5: Quick Alternating Strobe (+0.75 Rev)", 0x800B000D),
+            (-0.75, "Dual Mirror Phase 6: Quick Alternating Strobe (-0.75 Rev)", 0x800B000D),
+            (3.0, "Grand Finale: 3-Turn High-Speed Synchrony (+3.0 Rev)", 0x80040050),
+            (-3.0, "Grand Finale: 3-Turn Return to Datum (-3.0 Rev)", 0x80080001),
+        ]
+        self._require_safety_acknowledgment(lambda: self._start_routine_thread("🪞 Mirrored Synchronous Ballet", steps, target_rpm=3500, accel=250000, dwell_s=0.06))
 
     def _start_routine_thread(self, name: str, steps: List[Tuple[float, str, int]], target_rpm: int = 4000, accel: int = 200000, dwell_s: float = 0.08):
         def _worker():
