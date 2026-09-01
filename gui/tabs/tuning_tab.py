@@ -176,8 +176,23 @@ class TuningTab(tk.Frame):
         bottom_box.pack(fill="x", pady=(10, 0))
 
         tk.Label(bottom_box, text="LIVE KINEMATIC TRAJECTORY, POSITION RESPONSE & NOTCH BODE SPECTRUM", bg=COLOR_BG_CARD, fg=COLOR_TEXT_PRIMARY, font=FONT_SECTION).pack(anchor="w", pady=(0, 4))
-        self.curve_canvas = TuningCurveCanvas(bottom_box, height=135)
-        self.curve_canvas.pack(fill="x", expand=True)
+        
+        # Target Axis Selector Bar
+        target_bar = tk.Frame(self, bg=COLOR_BG_CARD, highlightbackground=COLOR_BG_ACCENT, highlightthickness=1, padx=12, pady=6)
+        target_bar.pack(fill="x", pady=(0, 8))
+        tk.Label(target_bar, text="TUNING TARGET MOTOR:", bg=COLOR_BG_CARD, fg=COLOR_MURR_LIME, font=FONT_BODY_BOLD).pack(side="left", padx=(0, 8))
+        self.var_tuning_target = tk.StringVar(value="0x1000")
+        for val, lbl in [("0x1000", "Motor 1 (0x1000)"), ("0x1001", "Motor 2 (0x1001)"), ("all", "Both Motors (Broadcast)")]:
+            tk.Radiobutton(
+                target_bar, text=lbl, value=val, variable=self.var_tuning_target,
+                bg=COLOR_BG_CARD, fg=COLOR_TEXT_PRIMARY, selectcolor=COLOR_BG_INPUT,
+                activebackground=COLOR_BG_CARD, activeforeground=COLOR_MURR_LIME,
+                font=FONT_BADGE, indicatoron=False, padx=8, pady=3
+            ).pack(side="left", padx=2)
+
+        # Top Live Bode Spectrum / Step Response Canvas
+        self.curve_canvas = TuningCurveCanvas(self, height=140)
+        self.curve_canvas.pack(fill="x", pady=(0, 10))
 
         self._update_curve()
 
@@ -388,7 +403,9 @@ class TuningTab(tk.Frame):
         self.app.log("Loaded Low-Noise / Anti-Resonance Tuning Preset.")
 
     def write_tuning_to_motor(self):
-        """Flashing all Section 8.2.1 & 8.2.2 tuning parameters via SDO."""
+        """Flashing all Section 8.2.1 & 8.2.2 tuning parameters via SDO to targeted axis."""
+        target = self.var_tuning_target.get()
+        target_addrs = [0x1000, 0x1001] if target == "all" else [int(target, 16)]
         notch_val = 0 if self.var_notch_on.get() else 1 # 0: ON, 1: OFF
 
         writes = [
@@ -409,51 +426,56 @@ class TuningTab(tk.Frame):
         ]
 
         success_cnt = 0
-        for idx, sub, data, desc in writes:
-            err = self.app.sdo_write(idx, sub, data)
-            if not err:
-                success_cnt += 1
-            time.sleep(0.01)
+        for addr in target_addrs:
+            for idx, sub, data, desc in writes:
+                err = self.app.sdo_write_slave(addr, idx, sub, data)
+                if not err:
+                    success_cnt += 1
+                time.sleep(0.008)
 
-        self.app.log(f"Applied Section 8.2 Tuning: {success_cnt}/{len(writes)} objects written over SDO.")
-        messagebox.showinfo("Tuning Applied", f"Successfully flashed {success_cnt}/{len(writes)} tuning parameters (Speed & Position Loops) to drive.")
+        total_ops = len(writes) * len(target_addrs)
+        self.app.log(f"Applied Section 8.2 Tuning: {success_cnt}/{total_ops} objects written over SDO to {target.upper()}.")
+        messagebox.showinfo("Tuning Applied", f"Successfully flashed {success_cnt}/{total_ops} tuning parameters to {target.upper()}.")
 
     def read_tuning_from_motor(self):
-        """Reads active tuning parameters live from motor."""
+        """Reads active tuning parameters live from targeted motor."""
+        target = self.var_tuning_target.get()
+        addr = 0x1000 if target == "all" else int(target, 16)
+        
         # 1. Bandwidth 0x2FF0:0A
-        d, _ = self.app.sdo_read(0x2FF0, 0x0A)
+        d, _ = self.app.sdo_read_slave(addr, 0x2FF0, 0x0A)
         if d: self.var_bw_hz.set(int.from_bytes(d[:2], 'little'))
 
         # 2. Kvp 0x60F9:01
-        d, _ = self.app.sdo_read(0x60F9, 0x01)
+        d, _ = self.app.sdo_read_slave(addr, 0x60F9, 0x01)
         if d: self.var_kvp.set(int.from_bytes(d[:2], 'little'))
 
         # 3. Kvi/32 0x60F9:07
-        d, _ = self.app.sdo_read(0x60F9, 0x07)
+        d, _ = self.app.sdo_read_slave(addr, 0x60F9, 0x07)
         if d: self.var_kvi32.set(int.from_bytes(d[:2], 'little'))
 
         # 4. Filter N 0x60F9:05
-        d, _ = self.app.sdo_read(0x60F9, 0x05)
+        d, _ = self.app.sdo_read_slave(addr, 0x60F9, 0x05)
         if d: self.var_fb_n.set(d[0])
 
         # 5. Position Gain Kpp 0x60FB:01
-        d, _ = self.app.sdo_read(0x60FB, 0x01)
+        d, _ = self.app.sdo_read_slave(addr, 0x60FB, 0x01)
         if d: self.var_kpp.set(int.from_bytes(d[:2], 'little'))
 
         # 6. Velocity Feedforward 0x2FF0:1A
-        d, _ = self.app.sdo_read(0x2FF0, 0x1A)
+        d, _ = self.app.sdo_read_slave(addr, 0x2FF0, 0x1A)
         if d: self.var_v_ff.set(int.from_bytes(d[:2], 'little'))
 
         # 7. Position Smoothing Filter 0x60FB:05
-        d, _ = self.app.sdo_read(0x60FB, 0x05)
+        d, _ = self.app.sdo_read_slave(addr, 0x60FB, 0x05)
         if d: self.var_pos_filter_n.set(d[0])
 
         # 8. Notch N 0x60F9:03 & Notch On 0x60F9:04
-        d, _ = self.app.sdo_read(0x60F9, 0x03)
+        d, _ = self.app.sdo_read_slave(addr, 0x60F9, 0x03)
         if d: self.var_notch_n.set(d[0])
 
-        d, _ = self.app.sdo_read(0x60F9, 0x04)
-        if d: self.var_notch_on.set(d[0] == 0) # 0 is ON
+        d, _ = self.app.sdo_read_slave(addr, 0x60F9, 0x04)
+        if d: self.var_notch_on.set(d[0] == 0)
 
         self._update_curve()
-        self.app.log("Read live Section 8.2 tuning parameters from motor.")
+        self.app.log(f"Read live Section 8.2 tuning parameters from 0x{addr:04X}.")

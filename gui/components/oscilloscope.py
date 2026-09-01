@@ -1,5 +1,6 @@
 """
-Real-time Multi-Channel Oscilloscope & Telemetry Strip Chart.
+Real-time Multi-Axis Oscilloscope & Telemetry Strip Chart.
+Supports simultaneous multi-channel plotting for dual servo axes.
 """
 
 import tkinter as tk
@@ -13,9 +14,9 @@ from gui.theme import (
 )
 
 class ScopeChart(tk.Canvas):
-    """Scrolling real-time waveform display."""
+    """Scrolling real-time dual-motor waveform display."""
 
-    def __init__(self, parent, max_points: int = 160, height: int = 160, **kwargs):
+    def __init__(self, parent, max_points: int = 160, height: int = 145, **kwargs):
         super().__init__(
             parent,
             bg=COLOR_BG_INPUT,
@@ -26,22 +27,28 @@ class ScopeChart(tk.Canvas):
         )
         self.max_points = max_points
         self.history: Dict[str, deque] = {
-            "velocity": deque(maxlen=max_points),
-            "position": deque(maxlen=max_points),
-            "torque": deque(maxlen=max_points),
+            "m1_vel": deque(maxlen=max_points),
+            "m1_pos": deque(maxlen=max_points),
+            "m2_vel": deque(maxlen=max_points),
+            "m2_pos": deque(maxlen=max_points),
         }
         self.channels = [
-            {"id": "velocity", "name": "Speed (RPM)", "color": COLOR_MURR_LIME, "scale": 3000.0},
-            {"id": "position", "name": "Position (kCounts)", "color": "#38BDF8", "scale": 100.0},
-            {"id": "torque", "name": "Torque (% x10)", "color": COLOR_WARNING, "scale": 300.0},
+            {"id": "m1_vel", "name": "M1 Speed (RPM)", "color": COLOR_MURR_LIME, "scale": 4000.0},
+            {"id": "m1_pos", "name": "M1 Pos (kCounts)", "color": "#38BDF8", "scale": 150.0},
+            {"id": "m2_vel", "name": "M2 Speed (RPM)", "color": "#F59E0B", "scale": 4000.0},
+            {"id": "m2_pos", "name": "M2 Pos (kCounts)", "color": "#EC4899", "scale": 150.0},
         ]
         self.bind("<Configure>", lambda e: self.redraw())
 
-    def append_sample(self, vel: float, pos: float, torque: float):
-        self.history["velocity"].append(vel)
-        # Position scaled in thousands of counts for smooth waveform plotting
-        self.history["position"].append(pos / 1000.0)
-        self.history["torque"].append(torque)
+    def append_sample(self, vel: float, pos: float, torque: float = 0.0):
+        """Single-axis fallback."""
+        self.append_multi_sample(vel, pos, 0.0, 0.0)
+
+    def append_multi_sample(self, m1_vel: float, m1_pos: float, m2_vel: float = 0.0, m2_pos: float = 0.0):
+        self.history["m1_vel"].append(m1_vel)
+        self.history["m1_pos"].append(m1_pos / 1000.0)
+        self.history["m2_vel"].append(m2_vel)
+        self.history["m2_pos"].append(m2_pos / 1000.0)
         self.redraw()
 
     def redraw(self):
@@ -63,10 +70,10 @@ class ScopeChart(tk.Canvas):
         for ch in reversed(self.channels):
             txt = ch["name"]
             color = ch["color"]
-            item = self.create_text(lx, 12, text=txt, fill=color, font=FONT_BADGE, anchor="e")
+            item = self.create_text(lx, 10, text=txt, fill=color, font=FONT_BADGE, anchor="e")
             bbox = self.bbox(item)
             if bbox:
-                lx = bbox[0] - 12
+                lx = bbox[0] - 10
 
         # Draw Traces
         dx = w / max(1, self.max_points - 1)

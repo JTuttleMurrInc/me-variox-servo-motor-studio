@@ -16,11 +16,12 @@ from gui.theme import (
 class PositionCard(tk.Frame):
     """Position Feedback Card displaying raw counts, 16-bit calculated revs, and a mechanical angle dial."""
 
-    def __init__(self, parent, counts_per_rev: int = 65536, **kwargs):
+    def __init__(self, parent, counts_per_rev: int = 65536, on_zero_offset=None, **kwargs):
         super().__init__(parent, bg=COLOR_BG_CARD, padx=12, pady=10, **kwargs)
         self.counts_per_rev = counts_per_rev  # 16-bit encoder = 65,536 inc / rev
         self.zero_offset = 0
         self.raw_position = 0
+        self.on_zero_offset = on_zero_offset
 
         # Header Row
         hdr = tk.Frame(self, bg=COLOR_BG_CARD)
@@ -57,6 +58,8 @@ class PositionCard(tk.Frame):
     def zero_position(self):
         self.zero_offset = self.raw_position
         self.set_position(self.raw_position)
+        if self.on_zero_offset:
+            self.on_zero_offset()
 
     def set_position(self, pos_counts: int):
         self.raw_position = pos_counts

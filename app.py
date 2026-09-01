@@ -1,38 +1,33 @@
 """
-Main Application Entry Point for Vario-X Motor Studio.
+Vario-X Motor Studio — Main Application Entry Point & GUI Controller.
+Murrelektronik Vario-X Servo Motor Diagnostic, Tuning, Motion & Optical LED Ring Studio.
 """
 
 import sys
 import os
 import time
-import argparse
 import tkinter as tk
 from tkinter import ttk, messagebox
-from typing import Optional, Tuple, Dict, Any
-
-# Windows Taskbar custom icon hook
-if sys.platform == "win32":
-    try:
-        import ctypes
-        APP_USER_MODEL_ID = "murrelektronik.variox.motorstudio.v1"
-        ctypes.windll.shell32.SetCurrentProcessExplicitAppUserModelID(APP_USER_MODEL_ID)
-    except Exception:
-        pass
+from typing import Optional, Dict
 
 from core.esi_parser import EsiParser
-from core.simulation import VirtualMotorDrive
-from core.motor_device import (
-    MotorTelemetry, Cia402State,
-    CMD_SHUTDOWN, CMD_SWITCH_ON, CMD_ENABLE_OPERATION, CMD_DISABLE_VOLTAGE, CMD_QUICK_STOP, CMD_FAULT_RESET
-)
-from core.ecat_raw import RawEthercatMaster
+from core.simulation import VirtualMotorDrive, VirtualMultiAxisDrive
 from core.ecat_master import EthercatMaster, SlaveInfo
+from core.motor_device import (
+    MotorTelemetry, Cia402State, OperationMode,
+    CMD_SHUTDOWN, CMD_SWITCH_ON, CMD_ENABLE_OPERATION, CMD_DISABLE_VOLTAGE,
+    CMD_QUICK_STOP, CMD_FAULT_RESET
+)
 from core.led_ring import LedRingConfig
 
 from gui.theme import (
-    setup_ttk_styles, COLOR_BG_DARK, COLOR_BG_CARD, COLOR_BG_ACCENT,
-    COLOR_TEXT_PRIMARY, COLOR_MURR_LIME, FONT_APP_TITLE, FONT_BADGE, FONT_BODY_BOLD
+    setup_ttk_styles, COLOR_BG_DARK, COLOR_BG_SURFACE, COLOR_BG_CARD,
+    COLOR_BG_INPUT, COLOR_BG_ACCENT, COLOR_TEXT_PRIMARY, COLOR_TEXT_MUTED,
+    COLOR_MURR_GREEN, COLOR_MURR_LIME, COLOR_WARNING, COLOR_DANGER,
+    FONT_TITLE, FONT_SECTION, FONT_SUBTITLE, FONT_BODY, FONT_BODY_BOLD,
+    FONT_MONO, FONT_MONO_BOLD, FONT_BADGE
 )
+
 from gui.tabs.dashboard_tab import DashboardTab
 from gui.tabs.led_studio_tab import LedStudioTab
 from gui.tabs.motion_tab import MotionTab
@@ -46,9 +41,9 @@ class VarioXMotorStudioApp:
 
     def __init__(self, root: tk.Tk, default_sim: bool = True, adapter_name: Optional[str] = None):
         self.root = root
-        self.root.title("Murrelektronik Vario-X Motor Studio — EtherCAT Diagnostic & LED Ring Workbench")
-        self.root.geometry("1280x820")
-        self.root.minsize(1050, 700)
+        self.root.title("Murrelektronik Vario-X Motor Studio — Multi-Axis EtherCAT Diagnostic & Motion Workbench")
+        self.root.geometry("1320x860")
+        self.root.minsize(1080, 720)
         self.root.configure(bg=COLOR_BG_DARK)
 
         setup_ttk_styles(self.root)
@@ -58,7 +53,8 @@ class VarioXMotorStudioApp:
         self.esi_parser = EsiParser()
         self.esi_parser.load_default()
 
-        self.virtual_motor = VirtualMotorDrive()
+        self.virtual_multi = VirtualMultiAxisDrive()
+        self.virtual_motor = self.virtual_multi.get_motor(0x1000)
         self.ecat_master = EthercatMaster()
 
         self.is_simulation = default_sim
@@ -103,7 +99,7 @@ class VarioXMotorStudioApp:
             ok = self.connect_hardware(adapter_name)
             if ok:
                 self.scan_slaves()
-                # Ensure motor starts in safe Shutdown state (0x0006)
+                # Ensure all motors start in safe Shutdown state (0x0006)
                 self.send_controlword(CMD_SHUTDOWN)
                 # Start live cyclic telemetry polling
                 self.ecat_master.start_cyclic_pdo(0.04)
@@ -115,185 +111,193 @@ class VarioXMotorStudioApp:
         icon_ico = os.path.abspath(os.path.join(os.path.dirname(__file__), "assets", "app_icon.ico"))
         icon_png = os.path.abspath(os.path.join(os.path.dirname(__file__), "assets", "app_icon.png"))
         
-        # 1. Native Windows Icon Bitmap (Sets taskbar + titlebar)
         if os.path.exists(icon_ico):
             try:
                 self.root.iconbitmap(default=icon_ico)
             except Exception:
-                try:
-                    self.root.wm_iconbitmap(icon_ico)
-                except Exception:
-                    pass
+                pass
         
-        # 2. Modern High-DPI iconphoto
         if os.path.exists(icon_png):
             try:
-                from PIL import ImageTk, Image
-                pil_img = Image.open(icon_png)
-                self._app_icon_img = ImageTk.PhotoImage(pil_img)
-                self.root.iconphoto(True, self._app_icon_img)
+                img = tk.PhotoImage(file=icon_png)
+                self.root.iconphoto(True, img)
+                self._app_icon_ref = img
             except Exception:
                 pass
 
     def _build_app_bar(self):
-        bar = tk.Frame(self.root, bg=COLOR_BG_DARK, padx=16, pady=10)
-        bar.pack(fill="x")
+        bar = tk.Frame(self.root, bg=COLOR_BG_SURFACE, height=54, padx=16, pady=6)
+        bar.pack(fill="x", side="top", pady=(0, 6))
 
-        title_frame = tk.Frame(bar, bg=COLOR_BG_DARK)
-        title_frame.pack(side="left")
+        # Brand Logo / Label (Left)
+        brand_frame = tk.Frame(bar, bg=COLOR_BG_SURFACE)
+        brand_frame.pack(side="left", fill="y")
 
-        # Official Murrelektronik Vector Logo in header
-        logo_png = os.path.abspath(os.path.join(os.path.dirname(__file__), "assets", "murr_logo.png"))
-        if os.path.exists(logo_png):
+        logo_path = os.path.join(os.path.dirname(__file__), "assets", "murr_logo.png")
+        if os.path.exists(logo_path):
             try:
-                from PIL import Image, ImageTk
-                im = Image.open(logo_png)
-                h_target = 22
-                w_target = int(im.width * (h_target / float(im.height)))
-                im_resized = im.resize((w_target, h_target), Image.Resampling.LANCZOS)
-                self._header_logo_img = ImageTk.PhotoImage(im_resized)
-                self.lbl_logo = tk.Label(title_frame, image=self._header_logo_img, bg=COLOR_BG_DARK, bd=0, highlightthickness=0)
-                self.lbl_logo.pack(side="left", padx=(0, 10))
+                self._logo_img = tk.PhotoImage(file=logo_path)
+                lbl_logo = tk.Label(brand_frame, image=self._logo_img, bg=COLOR_BG_SURFACE)
+                lbl_logo.pack(side="left", padx=(0, 10))
             except Exception:
-                tk.Label(title_frame, text="MURRELEKTRONIK", bg=COLOR_BG_DARK, fg=COLOR_MURR_LIME, font=(FONT_APP_TITLE[0], 15, "bold")).pack(side="left", padx=(0, 10))
+                lbl_brand = tk.Label(brand_frame, text="MURRELEKTRONIK", bg=COLOR_BG_SURFACE, fg=COLOR_MURR_LIME, font=FONT_TITLE)
+                lbl_brand.pack(side="left", padx=(0, 10))
         else:
-            tk.Label(title_frame, text="MURRELEKTRONIK", bg=COLOR_BG_DARK, fg=COLOR_MURR_LIME, font=(FONT_APP_TITLE[0], 15, "bold")).pack(side="left", padx=(0, 10))
+            lbl_brand = tk.Label(brand_frame, text="MURRELEKTRONIK", bg=COLOR_BG_SURFACE, fg=COLOR_MURR_LIME, font=FONT_TITLE)
+            lbl_brand.pack(side="left", padx=(0, 10))
 
-        tk.Label(title_frame, text="|  Vario-X Motor Studio (EtherCAT CoE / CiA 402)", bg=COLOR_BG_DARK, fg=COLOR_TEXT_PRIMARY, font=FONT_APP_TITLE).pack(side="left")
+        lbl_sep = tk.Label(brand_frame, text="|", bg=COLOR_BG_SURFACE, fg=COLOR_TEXT_MUTED, font=FONT_SECTION)
+        lbl_sep.pack(side="left", padx=(0, 10))
 
-        # Right Action Frame
-        right_frame = tk.Frame(bar, bg=COLOR_BG_DARK)
-        right_frame.pack(side="right")
+        lbl_app_title = tk.Label(brand_frame, text="Vario-X Motor Studio", bg=COLOR_BG_SURFACE, fg=COLOR_TEXT_PRIMARY, font=FONT_SECTION)
+        lbl_app_title.pack(side="left")
 
-        # About / CRA Compliance Button
-        self.btn_about = tk.Button(
-            right_frame, text="ℹ️ About", bg=COLOR_BG_CARD, fg=COLOR_TEXT_PRIMARY,
-            activebackground=COLOR_BG_ACCENT, activeforeground=COLOR_MURR_LIME,
-            font=FONT_BODY_BOLD, padx=12, pady=3, relief="flat",
-            highlightbackground=COLOR_BG_ACCENT, highlightthickness=1,
-            command=self.show_about_dialog
+        # Mode Indicator & Controls (Right)
+        ctrl_frame = tk.Frame(bar, bg=COLOR_BG_SURFACE)
+        ctrl_frame.pack(side="right", fill="y")
+
+        self.lbl_mode_badge = tk.Label(
+            ctrl_frame,
+            text="● VIRTUAL SIMULATION" if self.is_simulation else "● LIVE ETHERCAT",
+            bg="#16381C" if not self.is_simulation else "#1C3833",
+            fg=COLOR_MURR_LIME if not self.is_simulation else "#38BDF8",
+            font=FONT_BADGE,
+            padx=10, pady=4
         )
-        self.btn_about.pack(side="left", padx=(0, 12))
+        self.lbl_mode_badge.pack(side="left", padx=(0, 12))
 
-        # Mode Badge on right
-        self.lbl_top_mode = tk.Label(
-            right_frame, text="SIMULATION MODE", bg="#16381C", fg=COLOR_MURR_LIME,
-            font=FONT_BADGE, padx=12, pady=4
+        self.btn_toggle_mode = ttk.Button(
+            ctrl_frame,
+            text="Switch to Live Hardware" if self.is_simulation else "Switch to Simulation",
+            style="Action.TButton",
+            command=self.toggle_mode
         )
-        self.lbl_top_mode.pack(side="left")
+        self.btn_toggle_mode.pack(side="left", padx=(0, 8))
 
-    def show_about_dialog(self):
+        btn_about = ttk.Button(
+            ctrl_frame,
+            text="About",
+            style="Action.TButton",
+            command=self.show_about
+        )
+        btn_about.pack(side="left")
+
+    def show_about(self):
         AboutDialog(self.root)
 
-    def set_simulation_mode(self, is_sim: bool):
-        self.is_simulation = is_sim
-        if is_sim:
-            self.lbl_top_mode.config(text="SIMULATION MODE", bg="#16381C", fg=COLOR_MURR_LIME)
-            self.tab_dashboard.lbl_bus_status.config(text="Bus: SIMULATION MODE | Slave 0x1000")
-            self.log("Switched to Virtual Motor Simulation.")
+    def toggle_mode(self):
+        if self.is_simulation:
+            adapters = self.ecat_master.raw.list_adapters()
+            if not adapters:
+                messagebox.showwarning(
+                    "No Network Adapters",
+                    "No Npcap / WinPcap adapters found.\nMake sure Npcap is installed in WinPcap API-compatible mode."
+                )
+                return
+
+            target_adapter = None
+            for a in adapters:
+                if any(kw in a.description for kw in ['I219', 'Ethernet Connection', 'Intel(R) Ethernet', 'Realtek']):
+                    target_adapter = a.name
+                    break
+            
+            if not target_adapter and adapters:
+                target_adapter = adapters[0].name
+
+            if target_adapter:
+                ok = self.connect_hardware(target_adapter)
+                if ok:
+                    self.scan_slaves()
+                    self.send_controlword(CMD_SHUTDOWN)
+                    self.ecat_master.start_cyclic_pdo(0.04)
+                    self.is_simulation = False
+                    self.lbl_mode_badge.config(text="● LIVE ETHERCAT", bg="#16381C", fg=COLOR_MURR_LIME)
+                    self.btn_toggle_mode.config(text="Switch to Simulation")
+                    self.log("Switched to Live EtherCAT Hardware Mode.")
         else:
-            self.lbl_top_mode.config(text="LIVE HARDWARE MODE", bg="#123B44", fg="#38BDF8")
-            self.tab_dashboard.lbl_bus_status.config(text="Bus: LIVE ETHERCAT (Npcap)")
-            self.log("Switched to Live EtherCAT Hardware Mode.")
+            self.ecat_master.close()
+            self.is_simulation = True
+            self.lbl_mode_badge.config(text="● VIRTUAL SIMULATION", bg="#1C3833", fg="#38BDF8")
+            self.btn_toggle_mode.config(text="Switch to Live Hardware")
+            self.log("Switched to Virtual Motor Simulation.")
 
     def connect_hardware(self, adapter_name: str) -> bool:
         ok = self.ecat_master.open(adapter_name)
-        self.is_hardware_connected = ok
         if ok:
-            self.set_simulation_mode(False)
+            self.is_hardware_connected = True
+            self.is_simulation = False
+            self.lbl_mode_badge.config(text="● LIVE ETHERCAT", bg="#16381C", fg=COLOR_MURR_LIME)
+            self.btn_toggle_mode.config(text="Switch to Simulation")
             self.log(f"Connected to live adapter: {adapter_name}")
-            if hasattr(self, 'tab_diag'):
-                self.tab_diag.var_sim_mode.set(False)
-                self.tab_diag.lbl_link_status.config(text="STATUS: LIVE ETHERCAT CONNECTED", bg="#16381C", fg=COLOR_MURR_LIME)
-                self.tab_diag.btn_connect.config(text="Disconnect")
+        else:
+            self.log(f"Failed connecting to adapter {adapter_name}")
         return ok
 
-    def disconnect_hardware(self):
-        self.ecat_master.close()
-        self.is_hardware_connected = False
-        self.set_simulation_mode(True)
-        if hasattr(self, 'tab_diag'):
-            self.tab_diag.var_sim_mode.set(True)
-            self.tab_diag.lbl_link_status.config(text="STATUS: SIMULATION ACTIVE", bg="#16381C", fg=COLOR_MURR_LIME)
-            self.tab_diag.btn_connect.config(text="Connect Live Bus")
-        self.log("Disconnected from live hardware. Simulation activated.")
-
     def scan_slaves(self):
-        if self.is_simulation:
-            return [self.virtual_motor]
         slaves = self.ecat_master.scan_slaves()
         if hasattr(self, 'tab_diag'):
-            self.tab_diag.update_slave_list()
-        return slaves
+            self.tab_diag.refresh_slaves(slaves)
+        if hasattr(self, 'tab_sdo'):
+            self.tab_sdo.refresh_slaves(slaves)
+        if hasattr(self, 'tab_dashboard'):
+            count = len(slaves)
+            self.tab_dashboard.lbl_axes_count.config(text=f"DUAL ACTIVE AXES ({count} SLAVES FOUND)")
 
-    def set_al_state(self, target_state: int) -> bool:
-        if self.is_simulation:
-            return True
-        if self.ecat_master.slaves:
-            addr = self.ecat_master.slaves[0].configured_addr
-            return self.ecat_master.set_state(addr, target_state)
-        return False
+    # =========================================================================
+    # MULTI-AXIS CONTROLWORD & SDO DISPATCH
+    # =========================================================================
 
     def send_controlword(self, cw: int):
+        """Broadcasts controlword to all active axes."""
         if self.is_simulation:
-            self.virtual_motor.set_controlword(cw)
+            self.virtual_multi.set_controlword_all(cw)
         else:
-            if self.ecat_master.slaves:
-                addr = self.ecat_master.slaves[0].configured_addr
-                err = self.ecat_master.sdo_download(addr, 0x6040, 0x00, cw.to_bytes(2, 'little'))
-                if err:
-                    self.log(f"Error sending Controlword 0x{cw:04X}: {err}")
-                else:
-                    self.log(f"Sent Controlword: 0x{cw:04X}")
+            for slave in self.ecat_master.slaves:
+                self.send_controlword_slave(slave.configured_addr, cw)
 
-    def sdo_read(self, index: int, sub_index: int) -> Tuple[Optional[bytes], Optional[str]]:
+    def send_controlword_slave(self, station_addr: int, cw: int):
+        """Sends controlword to a specific slave station."""
         if self.is_simulation:
-            if index == 0x2FEF and sub_index == 0x01:
-                return self.virtual_motor.led_ctrl_dword.to_bytes(4, 'little'), None
-            elif index == 0x2FEF and sub_index == 0x02:
-                return self.virtual_motor.led_status_dword.to_bytes(4, 'little'), None
-            elif index == 0x6064:
-                return self.virtual_motor.position_actual.to_bytes(4, 'little', signed=True), None
-            elif index == 0x6041:
-                return self.virtual_motor.statusword.to_bytes(2, 'little'), None
-            return bytes([0, 0, 0, 0]), None
+            self.virtual_multi.set_controlword(station_addr, cw)
         else:
-            if not self.ecat_master.slaves:
-                return None, "No EtherCAT slaves found on bus"
-            addr = self.ecat_master.slaves[0].configured_addr
-            return self.ecat_master.sdo_upload(addr, index, sub_index)
+            err = self.ecat_master.sdo_download(station_addr, 0x6040, 0x00, cw.to_bytes(2, 'little'))
+            if err:
+                self.log(f"Error sending Controlword 0x{cw:04X} to 0x{station_addr:04X}: {err}")
+            else:
+                self.log(f"Sent Controlword 0x{cw:04X} to 0x{station_addr:04X}")
 
-    def sdo_write(self, index: int, sub_index: int, data: bytes) -> Optional[str]:
+    def sdo_read(self, index: int, sub_index: int):
+        """Single-axis fallback: reads from 0x1000."""
+        return self.sdo_read_slave(0x1000, index, sub_index)
+
+    def sdo_read_slave(self, station_addr: int, index: int, sub_index: int):
         if self.is_simulation:
-            if index == 0x2FEF and sub_index == 0x01:
-                val = int.from_bytes(data, 'little')
-                self.virtual_motor.set_led_ctrl(val)
-            elif index == 0x6040:
-                val = int.from_bytes(data, 'little')
-                self.virtual_motor.set_controlword(val)
-            return None
+            return self.virtual_multi.sdo_read(station_addr, index, sub_index)
         else:
-            if not self.ecat_master.slaves:
-                return "No EtherCAT slaves found on bus"
-            addr = self.ecat_master.slaves[0].configured_addr
-            err = self.ecat_master.sdo_download(addr, index, sub_index, data)
-            if not err and index == 0x2FEF and sub_index == 0x01 and len(data) >= 4:
-                dword = int.from_bytes(data[:4], 'little')
-                self.ecat_master.live_telemetry.led_ctrl_dword = dword
-                self.ecat_master.live_telemetry.led_config = LedRingConfig.from_dword(dword)
-            return err
+            return self.ecat_master.sdo_upload(station_addr, index, sub_index)
 
-    def apply_led_config(self, cfg: LedRingConfig):
+    def sdo_write(self, index: int, sub_index: int, data: bytes):
+        """Single-axis fallback: writes to 0x1000."""
+        return self.sdo_write_slave(0x1000, index, sub_index, data)
+
+    def sdo_write_slave(self, station_addr: int, index: int, sub_index: int, data: bytes):
+        if self.is_simulation:
+            return self.virtual_multi.sdo_write(station_addr, index, sub_index, data)
+        else:
+            return self.ecat_master.sdo_download(station_addr, index, sub_index, data)
+
+    def apply_led_config(self, cfg: LedRingConfig, station_addr: Optional[int] = None):
+        """Applies LED configuration to specified slave, or broadcasts to all slaves if station_addr is None."""
         dword = cfg.to_dword()
-        err = self.sdo_write(0x2FEF, 0x01, dword.to_bytes(4, 'little'))
-        if err:
-            self.log(f"Error applying LED_CTRL (0x2FEF:01): {err}")
-            messagebox.showerror("SDO Write Failed", f"Error setting LED_CTRL (0x2FEF:01):\n{err}")
-        else:
-            self.log(f"Applied LED_CTRL: 0x{dword:08X} ({cfg.description})")
-            if not self.is_simulation:
-                self.ecat_master.live_telemetry.led_ctrl_dword = dword
-                self.ecat_master.live_telemetry.led_config = cfg
+        targets = [station_addr] if station_addr else ([s.configured_addr for s in self.ecat_master.slaves] if not self.is_simulation else [0x1000, 0x1001])
+        
+        for addr in targets:
+            self.sdo_write_slave(addr, 0x2FEF, 0x01, dword.to_bytes(4, 'little'))
+            if not self.is_simulation and addr in self.ecat_master.telemetry_by_addr:
+                self.ecat_master.telemetry_by_addr[addr].led_ctrl_dword = dword
+                self.ecat_master.telemetry_by_addr[addr].led_config = cfg
+        
+        self.log(f"Applied LED_CTRL: 0x{dword:08X} ({cfg.description}) to {len(targets)} axis/axes.")
 
     def action_enable_drive(self):
         if hasattr(self, 'tab_motion') and not self.tab_motion.safety_acknowledged:
@@ -302,30 +306,32 @@ class VarioXMotorStudioApp:
             self._do_enable_drive()
 
     def _do_enable_drive(self):
-        # 1. Pre-initialize Mode of Operation to Profile Velocity (Mode 3)
-        self.sdo_write(0x6060, 0x00, (3).to_bytes(1, 'little', signed=True))
-        # 2. Pre-initialize Profile Velocity, Accel & Decel
-        self.sdo_write(0x6081, 0x00, (1092266).to_bytes(4, 'little')) # 1000 RPM
-        self.sdo_write(0x6083, 0x00, (150000).to_bytes(4, 'little'))
-        self.sdo_write(0x6084, 0x00, (150000).to_bytes(4, 'little'))
-        
-        # 3. CiA 402 Enable Sequence: 0x06 -> 0x07 -> 0x0F
-        self.send_controlword(CMD_SHUTDOWN)
-        self.root.after(40, lambda: self.send_controlword(CMD_SWITCH_ON))
-        self.root.after(80, lambda: self.send_controlword(CMD_ENABLE_OPERATION))
-        self.log("Initiated Drive Enable Sequence (Mode 3, Accel/Decel loaded, 0x06 -> 0x07 -> 0x0F).")
+        # Broadcast enable to all connected axes
+        for s in (self.ecat_master.slaves if not self.is_simulation else [type('S', (), {'configured_addr': 0x1000}), type('S', (), {'configured_addr': 0x1001})]):
+            addr = s.configured_addr
+            self.sdo_write_slave(addr, 0x6060, 0x00, (3).to_bytes(1, 'little', signed=True))
+            self.sdo_write_slave(addr, 0x6081, 0x00, (1092266).to_bytes(4, 'little'))
+            self.sdo_write_slave(addr, 0x6083, 0x00, (150000).to_bytes(4, 'little'))
+            self.sdo_write_slave(addr, 0x6084, 0x00, (150000).to_bytes(4, 'little'))
+            
+            self.send_controlword_slave(addr, CMD_SHUTDOWN)
+            time.sleep(0.015)
+            self.send_controlword_slave(addr, CMD_SWITCH_ON)
+            time.sleep(0.015)
+            self.send_controlword_slave(addr, CMD_ENABLE_OPERATION)
+        self.log("Dispatched Drive Enable sequence across all active axes.")
 
     def action_disable_drive(self):
         self.send_controlword(CMD_DISABLE_VOLTAGE)
-        self.log("Drive Voltage Disabled (0x0000).")
+        self.log("All Axes Voltage Disabled (0x0000).")
 
     def action_quick_stop(self):
         self.send_controlword(CMD_QUICK_STOP)
-        self.log("Quick Stop Executed (0x0002).")
+        self.log("Quick Stop Executed on All Axes (0x0002).")
 
     def action_fault_reset(self):
         self.send_controlword(CMD_FAULT_RESET)
-        self.log("Fault Reset Edge Sent (0x0080).")
+        self.log("Fault Reset Edge Sent to All Axes (0x0080).")
 
     def log(self, msg: str):
         timestamp = time.strftime("%H:%M:%S")
@@ -339,61 +345,48 @@ class VarioXMotorStudioApp:
         self.root.after(30, self._schedule_telemetry_tick)
 
     def _telemetry_tick(self):
-        # Sample telemetry
+        # Sample Multi-Axis telemetry
         if self.is_simulation:
-            t = self.virtual_motor.get_telemetry()
+            t_dict = self.virtual_multi.get_telemetry_dict()
         else:
-            t = self.ecat_master.live_telemetry
+            t_dict = self.ecat_master.telemetry_by_addr
 
-        self.current_telemetry = t
+        t1 = t_dict.get(0x1000)
+        t2 = t_dict.get(0x1001)
 
         # Log status to terminal every ~500ms
-        if not self.is_simulation:
+        if not self.is_simulation and t1:
             self._log_tick_cnt += 1
             if self._log_tick_cnt % 15 == 0:
-                self._last_pos_log = t.position_actual
-                sto_str = "OK (A+B HIGH)" if not t.sto_active else ("TRIPPED" if not t.sto_info else t.sto_info.error_code_hex)
-                print(f"[{time.strftime('%H:%M:%S')}] [LIVE-FEEDBACK] Pos: {t.position_actual:>10,d} inc | {t.position_actual/65536.0:>6.2f} rev | Speed: {t.velocity_rpm} RPM | Bus: {t.dc_bus_voltage_v:.1f}V | STO: {sto_str} | State: {t.cia_state.value}")
+                p1 = t1.position_actual
+                p2 = t2.position_actual if t2 else 0
+                v1 = t1.velocity_rpm
+                v2 = t2.velocity_rpm if t2 else 0
+                bus1 = t1.dc_bus_voltage_v
+                print(f"[{time.strftime('%H:%M:%S')}] [LIVE-DUAL] M1 (0x1000): {p1:>8,d} inc ({v1:>4d} RPM) | M2 (0x1001): {p2:>8,d} inc ({v2:>4d} RPM) | Bus: {bus1:.1f}V | State: {t1.cia_state.value}")
 
         # Update tabs
-        self.tab_dashboard.update_telemetry(t)
+        self.tab_dashboard.update_multi_telemetry(t_dict)
+        self.tab_motion.update_multi_telemetry(t_dict)
         self.tab_led_studio.update_animation()
-        self.tab_motion.update_telemetry(t)
-
-        # Sync Dashboard optical ring preview to live LED config
-        if not self.is_simulation and t.led_config:
-            self.tab_dashboard.ring_widget.set_config(t.led_config)
 
 def main():
-    parser = argparse.ArgumentParser(description="Murrelektronik Vario-X Motor Studio")
-    parser.add_argument("--sim", action="store_true", default=True, help="Start in Virtual Simulation Mode (default: True)")
-    parser.add_argument("--live", action="store_true", help="Start in Live Hardware Mode")
-    parser.add_argument("--adapter", type=str, default=None, help="Npcap Adapter Name")
-    args = parser.parse_args()
+    use_live = ("--live" in sys.argv)
+    adapter = None
 
-    default_sim = True
-    adapter_name = args.adapter
-    if args.live:
-        default_sim = False
-        if not adapter_name:
-            adapters = RawEthercatMaster.list_adapters()
-            for a in adapters:
-                if any(kw in a.description for kw in ["I219", "Ethernet Connection", "Intel(R) Ethernet"]):
-                    adapter_name = a.name
-                    break
-            if not adapter_name and adapters:
-                adapter_name = adapters[0].name
+    if use_live:
+        from core.ecat_raw import RawEthercatMaster
+        raw = RawEthercatMaster()
+        adapters = raw.list_adapters()
+        for a in adapters:
+            if any(kw in a.description for kw in ['I219', 'Ethernet Connection', 'Intel(R) Ethernet', 'Realtek']):
+                adapter = a.name
+                break
+        if not adapter and adapters:
+            adapter = adapters[0].name
 
     root = tk.Tk()
-    app = VarioXMotorStudioApp(root, default_sim=default_sim, adapter_name=adapter_name)
-    
-    def on_closing():
-        app.virtual_motor.stop()
-        if app.is_hardware_connected:
-            app.disconnect_hardware()
-        root.destroy()
-
-    root.protocol("WM_DELETE_WINDOW", on_closing)
+    app = VarioXMotorStudioApp(root, default_sim=not use_live, adapter_name=adapter)
     root.mainloop()
 
 if __name__ == "__main__":

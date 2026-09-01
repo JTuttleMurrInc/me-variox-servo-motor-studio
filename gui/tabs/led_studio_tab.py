@@ -98,8 +98,21 @@ class LedStudioTab(tk.Frame):
 
         tk.Label(card, text="CHANNEL MATRIX & CONTROLS", bg=COLOR_BG_CARD, fg=COLOR_MURR_LIME, font=FONT_TITLE).pack(anchor="w")
         
+        # Target Axis Selector
+        target_box = tk.Frame(card, bg=COLOR_BG_CARD, pady=4)
+        target_box.pack(fill="x")
+        tk.Label(target_box, text="Target Motor:", bg=COLOR_BG_CARD, fg=COLOR_TEXT_MUTED, font=FONT_BADGE).pack(side="left", padx=(0, 6))
+        self.var_led_target = tk.StringVar(value="all")
+        for val, lbl in [("all", "All Motors (Broadcast)"), ("0x1000", "Motor 1 (0x1000)"), ("0x1001", "Motor 2 (0x1001)")]:
+            tk.Radiobutton(
+                target_box, text=lbl, value=val, variable=self.var_led_target,
+                bg=COLOR_BG_CARD, fg=COLOR_TEXT_PRIMARY, selectcolor=COLOR_BG_INPUT,
+                activebackground=COLOR_BG_CARD, activeforeground=COLOR_MURR_LIME,
+                font=FONT_BADGE, indicatoron=False, padx=6, pady=2
+            ).pack(side="left", padx=2)
+
         # User Mode vs Auto Mode Switch
-        mode_frame = tk.Frame(card, bg=COLOR_BG_CARD, pady=8)
+        mode_frame = tk.Frame(card, bg=COLOR_BG_CARD, pady=6)
         mode_frame.pack(fill="x")
 
         chk_mode = tk.Checkbutton(
@@ -321,29 +334,24 @@ class LedStudioTab(tk.Frame):
             messagebox.showerror("Invalid Hex", f"Could not parse '{val_str}' as a 32-bit hex DWORD.")
 
     def apply_to_motor(self):
-        """Sends SDO Download 0x2FEF:01 to motor / simulation."""
-        dword = self.current_config.to_dword()
-        data = dword.to_bytes(4, 'little')
-        err = self.app.sdo_write(0x2FEF, 0x01, data)
-        if err:
-            self.app.log(f"LED SDO Write Note: {err}")
-        else:
-            self.app.log(f"Applied LED_CTRL: 0x{dword:08X} ({self.current_config.description})")
-        
+        """Sends SDO Download 0x2FEF:01 to selected motor or broadcasts to all."""
+        target = self.var_led_target.get()
+        target_addr = None if target == "all" else int(target, 16)
+        self.app.apply_led_config(self.current_config, station_addr=target_addr)
         self.ring_widget.set_config(self.current_config)
-        if hasattr(self.app, 'tab_dashboard') and hasattr(self.app.tab_dashboard, 'ring_widget'):
-            self.app.tab_dashboard.ring_widget.set_config(self.current_config)
 
     def read_from_motor(self):
         """Reads SDO Upload 0x2FEF:02 from motor / simulation."""
-        data, err = self.app.sdo_read(0x2FEF, 0x02)
+        target = self.var_led_target.get()
+        addr = 0x1000 if target == "all" else int(target, 16)
+        data, err = self.app.sdo_read_slave(addr, 0x2FEF, 0x02)
         if err:
-            self.app.log(f"Error reading LED_Status (0x2FEF:02): {err}")
+            self.app.log(f"Error reading LED_Status (0x2FEF:02) from 0x{addr:04X}: {err}")
         elif data and len(data) >= 4:
             dword = int.from_bytes(data[:4], 'little')
             self.current_config = LedRingConfig.from_dword(dword)
             self._sync_ui_from_config()
-            self.app.log(f"Read LED_Status: 0x{dword:08X}")
+            self.app.log(f"Read LED_Status from 0x{addr:04X}: 0x{dword:08X}")
 
     def update_animation(self):
         self.ring_widget.update_frame()

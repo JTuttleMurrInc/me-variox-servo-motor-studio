@@ -1,6 +1,6 @@
 """
 CoE SDO Object Dictionary Explorer Tab.
-Parses and displays all objects from ESI XML with inline SDO Read and Write.
+Parses and displays all objects from ESI XML with multi-axis target selection, inline SDO Read and Write.
 """
 
 import tkinter as tk
@@ -16,7 +16,7 @@ from gui.theme import (
 )
 
 class SdoExplorerTab(tk.Frame):
-    """Searchable Object Dictionary tree with interactive SDO Upload/Download."""
+    """Searchable Object Dictionary tree with multi-slave SDO Upload/Download."""
 
     def __init__(self, parent, app, **kwargs):
         super().__init__(parent, bg=COLOR_BG_SURFACE, padx=16, pady=16, **kwargs)
@@ -26,6 +26,7 @@ class SdoExplorerTab(tk.Frame):
         # Variables
         self.var_search = tk.StringVar()
         self.var_write_val = tk.StringVar()
+        self.var_sdo_station = tk.StringVar(value="0x1000")
         self.selected_item = None # (index, subindex, dtype, access)
 
         # Top Search Bar
@@ -50,9 +51,14 @@ class SdoExplorerTab(tk.Frame):
         bar = tk.Frame(self, bg=COLOR_BG_CARD, highlightbackground=COLOR_BG_ACCENT, highlightthickness=1, padx=14, pady=10)
         bar.pack(fill="x")
 
-        tk.Label(bar, text="SEARCH OBJECT DICTIONARY:", bg=COLOR_BG_CARD, fg=COLOR_MURR_LIME, font=FONT_BODY_BOLD).pack(side="left", padx=(0, 10))
+        # Target Slave Selector
+        tk.Label(bar, text="TARGET SLAVE:", bg=COLOR_BG_CARD, fg=COLOR_MURR_LIME, font=FONT_BODY_BOLD).pack(side="left", padx=(0, 6))
+        self.combo_sdo_station = ttk.Combobox(bar, textvariable=self.var_sdo_station, values=["0x1000", "0x1001"], state="readonly", width=8, font=FONT_BODY_BOLD)
+        self.combo_sdo_station.pack(side="left", padx=(0, 14))
+
+        tk.Label(bar, text="SEARCH:", bg=COLOR_BG_CARD, fg=COLOR_TEXT_PRIMARY, font=FONT_BODY_BOLD).pack(side="left", padx=(0, 8))
         
-        entry = ttk.Entry(bar, textvariable=self.var_search, font=FONT_BODY, width=32)
+        entry = ttk.Entry(bar, textvariable=self.var_search, font=FONT_BODY, width=28)
         entry.pack(side="left", padx=(0, 8))
         entry.bind("<KeyRelease>", lambda e: self.refresh_tree())
 
@@ -66,192 +72,193 @@ class SdoExplorerTab(tk.Frame):
         )
         self.lbl_stats.pack(side="right")
 
+    def refresh_slaves(self, slaves):
+        if slaves:
+            vals = [f"0x{s.configured_addr:04X}" for s in slaves]
+            self.combo_sdo_station.config(values=vals)
+            if self.var_sdo_station.get() not in vals:
+                self.var_sdo_station.set(vals[0])
+
     def _build_tree(self, parent):
         tree_card = tk.Frame(parent, bg=COLOR_BG_CARD, highlightbackground=COLOR_BG_ACCENT, highlightthickness=1)
         tree_card.pack(fill="both", expand=True)
 
-        columns = ("index", "sub", "name", "type", "access", "live_val")
+        columns = ("index", "sub", "name", "type", "access", "value")
         self.tree = ttk.Treeview(tree_card, columns=columns, show="headings", selectmode="browse")
 
-        self.tree.heading("index", text="Index")
-        self.tree.heading("sub", text="Sub")
-        self.tree.heading("name", text="Object Name")
-        self.tree.heading("type", text="Data Type")
-        self.tree.heading("access", text="Access")
-        self.tree.heading("live_val", text="Live Value")
+        self.tree.heading("index", text="Index", anchor="w")
+        self.tree.heading("sub", text="Sub", anchor="center")
+        self.tree.heading("name", text="Object Name", anchor="w")
+        self.tree.heading("type", text="Data Type", anchor="w")
+        self.tree.heading("access", text="Access", anchor="center")
+        self.tree.heading("value", text="Value (Hex / Dec)", anchor="w")
 
-        self.tree.column("index", width=80, anchor="center")
-        self.tree.column("sub", width=50, anchor="center")
-        self.tree.column("name", width=220, anchor="w")
-        self.tree.column("type", width=80, anchor="center")
-        self.tree.column("access", width=60, anchor="center")
-        self.tree.column("live_val", width=140, anchor="w")
+        self.tree.column("index", width=80, stretch=False)
+        self.tree.column("sub", width=50, stretch=False, anchor="center")
+        self.tree.column("name", width=260, stretch=True)
+        self.tree.column("type", width=90, stretch=False)
+        self.tree.column("access", width=65, stretch=False, anchor="center")
+        self.tree.column("value", width=160, stretch=True)
 
-        scrollbar = ttk.Scrollbar(tree_card, orient="vertical", command=self.tree.yview)
-        self.tree.configure(yscrollcommand=scrollbar.set)
+        # Scrollbar
+        sb = ttk.Scrollbar(tree_card, orient="vertical", command=self.tree.yview)
+        self.tree.configure(yscrollcommand=sb.set)
 
         self.tree.pack(side="left", fill="both", expand=True)
-        scrollbar.pack(side="right", fill="y")
+        sb.pack(side="right", fill="y")
 
-        self.tree.bind("<<TreeviewSelect>>", self._on_tree_select)
-        self.tree.bind("<Double-1>", lambda e: self.read_selected_sdo())
+        self.tree.bind("<<TreeviewSelect>>", self._on_select_item)
 
     def _build_inspector(self, parent):
-        card = tk.Frame(parent, bg=COLOR_BG_CARD, highlightbackground=COLOR_BG_ACCENT, highlightthickness=1, padx=16, pady=16)
+        card = tk.Frame(parent, bg=COLOR_BG_CARD, highlightbackground=COLOR_BG_ACCENT, highlightthickness=1, padx=14, pady=14)
         card.pack(fill="both", expand=True)
 
-        tk.Label(card, text="SDO OBJECT INSPECTOR", bg=COLOR_BG_CARD, fg=COLOR_MURR_LIME, font=FONT_TITLE).pack(anchor="w", pady=(0, 10))
-
-        # Details Box
-        self.box_details = tk.Frame(card, bg=COLOR_BG_INPUT, padx=12, pady=10)
-        self.box_details.pack(fill="x", pady=(0, 14))
-
-        self.lbl_insp_title = tk.Label(self.box_details, text="Select an Object", bg=COLOR_BG_INPUT, fg=COLOR_TEXT_PRIMARY, font=FONT_MONO_BOLD)
-        self.lbl_insp_title.pack(anchor="w")
-
-        self.lbl_insp_info = tk.Label(
-            self.box_details, text="Click an object in the dictionary to inspect, read, or write CoE SDO parameters.",
-            bg=COLOR_BG_INPUT, fg=COLOR_TEXT_MUTED, font=FONT_SUBTITLE, justify="left"
-        )
-        self.lbl_insp_info.pack(anchor="w", pady=(4, 0))
-
-        # Actions
-        tk.Label(card, text="CoE Operations:", bg=COLOR_BG_CARD, fg=COLOR_TEXT_PRIMARY, font=FONT_SECTION).pack(anchor="w", pady=(8, 4))
-
-        # Read Button
-        self.btn_read = ttk.Button(card, text="Read SDO (Upload)", style="Murr.TButton", command=self.read_selected_sdo)
-        self.btn_read.pack(fill="x", pady=4)
-
-        # Write Controls
-        tk.Label(card, text="Write Value (Download):", bg=COLOR_BG_CARD, fg=COLOR_TEXT_PRIMARY, font=FONT_BODY_BOLD).pack(anchor="w", pady=(12, 4))
+        tk.Label(card, text="SDO OBJECT INSPECTOR", bg=COLOR_BG_CARD, fg=COLOR_MURR_LIME, font=FONT_TITLE).pack(anchor="w")
         
-        w_box = tk.Frame(card, bg=COLOR_BG_CARD)
-        w_box.pack(fill="x")
-        self.entry_write = ttk.Entry(w_box, textvariable=self.var_write_val, font=FONT_MONO)
-        self.entry_write.pack(side="left", fill="x", expand=True, padx=(0, 6))
+        # Details Box
+        self.lbl_selected_title = tk.Label(card, text="Select an object from the list", bg=COLOR_BG_CARD, fg=COLOR_TEXT_PRIMARY, font=FONT_SECTION, wraplength=280, justify="left")
+        self.lbl_selected_title.pack(anchor="w", pady=(8, 4))
 
-        self.btn_write = ttk.Button(w_box, text="Write SDO", style="Action.TButton", command=self.write_selected_sdo)
-        self.btn_write.pack(side="left")
+        self.lbl_meta = tk.Label(card, text="", bg=COLOR_BG_CARD, fg=COLOR_TEXT_MUTED, font=FONT_MONO, justify="left")
+        self.lbl_meta.pack(anchor="w", pady=(0, 10))
+
+        ttk.Separator(card, orient="horizontal").pack(fill="x", pady=8)
+
+        # Read Action
+        tk.Label(card, text="SDO UPLOAD (READ)", bg=COLOR_BG_CARD, fg=COLOR_TEXT_PRIMARY, font=FONT_SECTION).pack(anchor="w", pady=(4, 4))
+        
+        self.lbl_live_val = tk.Label(card, text="Value: --", bg=COLOR_BG_INPUT, fg=COLOR_MURR_LIME, font=FONT_MONO_BOLD, padx=8, pady=6)
+        self.lbl_live_val.pack(fill="x", pady=(0, 6))
+
+        self.btn_read = ttk.Button(card, text="🔄 Read from Selected Motor", style="Action.TButton", command=self.read_selected, state="disabled")
+        self.btn_read.pack(fill="x", pady=(0, 12))
+
+        ttk.Separator(card, orient="horizontal").pack(fill="x", pady=8)
+
+        # Write Action
+        tk.Label(card, text="SDO DOWNLOAD (WRITE)", bg=COLOR_BG_CARD, fg=COLOR_TEXT_PRIMARY, font=FONT_SECTION).pack(anchor="w", pady=(4, 4))
+        
+        write_box = tk.Frame(card, bg=COLOR_BG_CARD)
+        write_box.pack(fill="x", pady=(0, 6))
+
+        tk.Label(write_box, text="New Value:", bg=COLOR_BG_CARD, fg=COLOR_TEXT_MUTED, font=FONT_SUBTITLE).pack(side="left", padx=(0, 6))
+        self.entry_write = ttk.Entry(write_box, textvariable=self.var_write_val, font=FONT_MONO)
+        self.entry_write.pack(side="left", fill="x", expand=True)
+
+        self.btn_write = ttk.Button(card, text="💾 Write to Selected Motor", style="Murr.TButton", command=self.write_selected, state="disabled")
+        self.btn_write.pack(fill="x")
 
     def refresh_tree(self):
-        for item in self.tree.get_children():
-            self.tree.delete(item)
-
+        self.tree.delete(*self.tree.get_children())
         if not self.parser.device_info:
             return
 
-        query = self.var_search.get().strip().lower()
+        query = self.var_search.get().lower().strip()
 
-        for idx, obj in sorted(self.parser.device_info.objects.items()):
-            # Check match
-            match = (not query) or (query in obj.hex_index.lower()) or (query in obj.name.lower()) or (query in obj.category.lower())
-            
+        for obj in self.parser.device_info.objects.values():
+            # Filter check
+            idx_hex = f"0x{obj.index:04X}".lower()
+            name_low = obj.name.lower()
+
+            if query and (query not in idx_hex and query not in name_low):
+                # Check subitems
+                match_sub = any(query in s.name.lower() or query in s.data_type.lower() for s in obj.sub_items.values())
+                if not match_sub:
+                    continue
+
             if not obj.sub_items:
-                if match:
-                    item_id = f"{obj.hex_index}:00"
-                    self.tree.insert("", "end", iid=item_id, values=(
-                        obj.hex_index, "0x00", obj.name, obj.data_type, obj.access, ""
-                    ))
+                # Single item object
+                vals = (f"0x{obj.index:04X}", "0x00", obj.name, obj.data_type, "RW", "--")
+                self.tree.insert("", "end", iid=f"{obj.index:04X}:00", values=vals)
             else:
-                for sub_idx, sub in sorted(obj.sub_items.items()):
-                    sub_match = match or (query in sub.name.lower())
-                    if sub_match:
-                        item_id = f"{obj.hex_index}:{sub_idx:02X}"
-                        self.tree.insert("", "end", iid=item_id, values=(
-                            obj.hex_index, f"0x{sub_idx:02X}", sub.name, sub.data_type, sub.access, ""
-                        ))
+                for sub in obj.sub_items.values():
+                    access = "RW" if "w" in sub.access.lower() else "RO"
+                    vals = (f"0x{obj.index:04X}", f"0x{sub.sub_index:02X}", f"  ↳ {sub.name}", sub.data_type, access, "--")
+                    self.tree.insert("", "end", iid=f"{obj.index:04X}:{sub.sub_index:02X}", values=vals)
 
-    def _on_tree_select(self, event):
-        selected = self.tree.selection()
-        if not selected:
-            return
-        item_id = selected[0]
-        vals = self.tree.item(item_id, "values")
-        if not vals:
+    def _on_select_item(self, event):
+        sel = self.tree.selection()
+        if not sel:
             return
 
-        idx_str, sub_str, name, dtype, access, live_val = vals
-        idx = int(idx_str, 16)
-        sub = int(sub_str, 16)
+        iid = sel[0]
+        parts = iid.split(":")
+        idx = int(parts[0], 16)
+        sub = int(parts[1], 16)
+
+        obj = self.parser.get_object(idx)
+        if not obj:
+            return
+
+        subitem = obj.sub_items.get(sub)
+        name = subitem.name if subitem else obj.name
+        dtype = subitem.data_type if subitem else obj.data_type
+        access = subitem.access if subitem else "rw"
 
         self.selected_item = (idx, sub, dtype, access)
-        self.lbl_insp_title.config(text=f"{idx_str}:{sub_str} - {name}")
-        self.lbl_insp_info.config(
-            text=f"Data Type: {dtype}\nAccess: {access.upper()}\nDefault: {live_val or 'N/A'}"
-        )
 
-    def read_selected_sdo(self):
+        self.lbl_selected_title.config(text=f"0x{idx:04X}:{sub:02X} — {name}")
+        self.lbl_meta.config(text=f"Data Type: {dtype} | Access: {access.upper()}")
+        self.lbl_live_val.config(text="Value: --")
+
+        self.btn_read.config(state="normal")
+        can_write = ("w" in access.lower()) or ("write" in access.lower())
+        self.btn_write.config(state="normal" if can_write else "disabled")
+
+    def read_selected(self):
         if not self.selected_item:
             return
-        idx, sub, dtype, access = self.selected_item
-        data, err = self.app.sdo_read(idx, sub)
+        idx, sub, dtype, _ = self.selected_item
+        addr = int(self.var_sdo_station.get(), 16)
+
+        data, err = self.app.sdo_read_slave(addr, idx, sub)
         if err:
-            messagebox.showerror("SDO Read Error", f"Failed reading 0x{idx:04X}:{sub:02X}:\n{err}")
-        elif data is not None:
-            val_str = self._format_data_bytes(data, dtype)
-            item_id = f"0x{idx:04X}:{sub:02X}"
-            if self.tree.exists(item_id):
-                vals = list(self.tree.item(item_id, "values"))
-                vals[5] = val_str
-                self.tree.item(item_id, values=vals)
-            self.lbl_insp_info.config(
-                text=f"Data Type: {dtype}\nAccess: {access.upper()}\nLive Value: {val_str} (Hex: {data.hex()})"
-            )
-            self.app.log(f"SDO Read 0x{idx:04X}:{sub:02X} -> {val_str}")
-
-    def write_selected_sdo(self):
-        if not self.selected_item:
-            return
-        idx, sub, dtype, access = self.selected_item
-        if "w" not in access.lower():
-            messagebox.showwarning("Read Only", f"Object 0x{idx:04X}:{sub:02X} is marked Read Only ({access}).")
-            return
-
-        val_input = self.var_write_val.get().strip()
-        data = self._parse_input_to_bytes(val_input, dtype)
-        if data is None:
-            messagebox.showerror("Invalid Value", f"Could not parse '{val_input}' for data type {dtype}.")
-            return
-
-        err = self.app.sdo_write(idx, sub, data)
-        if err:
-            messagebox.showerror("SDO Write Error", f"Failed writing 0x{idx:04X}:{sub:02X}:\n{err}")
-        else:
-            self.app.log(f"SDO Write 0x{idx:04X}:{sub:02X} = {val_input}")
-            self.read_selected_sdo()
-
-    def _format_data_bytes(self, data: bytes, dtype: str) -> str:
-        d = dtype.upper()
-        if "UINT" in d or "UDINT" in d or "USINT" in d:
-            val = int.from_bytes(data, 'little', signed=False)
-            return f"{val} (0x{val:X})"
-        elif "INT" in d or "DINT" in d or "SINT" in d:
-            val = int.from_bytes(data, 'little', signed=True)
-            return f"{val}"
-        elif "STRING" in d:
-            return data.decode('utf-8', errors='ignore').rstrip('\x00')
-        else:
-            val = int.from_bytes(data, 'little', signed=False)
-            return f"0x{val:X} ({data.hex()})"
-
-    def _parse_input_to_bytes(self, input_str: str, dtype: str) -> Optional[bytes]:
-        try:
-            d = dtype.upper()
-            val = int(input_str, 16) if (input_str.startswith("0x") or input_str.startswith("0X")) else int(input_str)
+            self.lbl_live_val.config(text=f"Error: {err}")
+            self.app.log(f"SDO Read Error 0x{idx:04X}:{sub:02X} on 0x{addr:04X}: {err}")
+        elif data:
+            hex_str = "0x" + data[::-1].hex().upper() if len(data) <= 4 else data.hex()
+            dec_val = int.from_bytes(data, 'little', signed=("int" in dtype.lower() and not "uint" in dtype.lower()))
+            disp = f"{hex_str} ({dec_val})"
+            self.lbl_live_val.config(text=disp)
+            self.var_write_val.set(str(dec_val))
             
-            if "USINT" in d or "UINT8" in d or d == "BYTE":
-                return int(val & 0xFF).to_bytes(1, 'little', signed=False)
-            elif "SINT" in d or "INT8" in d:
-                return int(val).to_bytes(1, 'little', signed=True)
-            elif "UINT" in d or "UINT16" in d or d == "WORD":
-                return int(val & 0xFFFF).to_bytes(2, 'little', signed=False)
-            elif "INT" in d or "INT16" in d:
-                return int(val).to_bytes(2, 'little', signed=True)
-            elif "UDINT" in d or "UINT32" in d or d == "DWORD":
-                return int(val & 0xFFFFFFFF).to_bytes(4, 'little', signed=False)
-            elif "DINT" in d or "INT32" in d:
-                return int(val).to_bytes(4, 'little', signed=True)
-            else:
-                return int(val & 0xFFFFFFFF).to_bytes(4, 'little', signed=False)
-        except Exception:
-            return None
+            # Update in tree
+            iid = f"{idx:04X}:{sub:02X}"
+            if self.tree.exists(iid):
+                curr = list(self.tree.item(iid, "values"))
+                curr[5] = disp
+                self.tree.item(iid, values=curr)
+            
+            self.app.log(f"SDO Read 0x{idx:04X}:{sub:02X} from 0x{addr:04X} = {disp}")
+
+    def write_selected(self):
+        if not self.selected_item:
+            return
+        idx, sub, dtype, _ = self.selected_item
+        val_str = self.var_write_val.get().strip()
+        addr = int(self.var_sdo_station.get(), 16)
+
+        try:
+            val = int(val_str, 16) if (val_str.startswith("0x") or val_str.startswith("0X")) else int(val_str)
+        except ValueError:
+            messagebox.showerror("Invalid Value", f"Could not parse '{val_str}' as an integer.")
+            return
+
+        # Determine byte size from dtype
+        size = 4
+        if "8" in dtype: size = 1
+        elif "16" in dtype: size = 2
+        elif "32" in dtype: size = 4
+        elif "64" in dtype: size = 8
+
+        signed = ("int" in dtype.lower() and not "uint" in dtype.lower())
+        data = val.to_bytes(size, 'little', signed=signed)
+
+        err = self.app.sdo_write_slave(addr, idx, sub, data)
+        if err:
+            self.app.log(f"SDO Write Error 0x{idx:04X}:{sub:02X} on 0x{addr:04X}: {err}")
+            messagebox.showerror("Write Error", f"SDO Download Failed:\n{err}")
+        else:
+            self.app.log(f"SDO Write 0x{idx:04X}:{sub:02X} on 0x{addr:04X} = {val} ({data.hex()})")
+            # Automatically read back to confirm
+            self.read_selected()

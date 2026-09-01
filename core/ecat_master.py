@@ -1,5 +1,5 @@
 """
-EtherCAT Master State Machine, CoE SDO Engine, and Cyclic Telemetry Poller.
+EtherCAT Master State Machine, CoE SDO Engine, and Scalable Multi-Axis Telemetry Poller.
 """
 
 import struct
@@ -40,7 +40,7 @@ class SlaveInfo:
     mailbox: MailboxConfig = field(default_factory=MailboxConfig)
 
 class EthercatMaster:
-    """High-level EtherCAT Master with CoE and Telemetry capabilities."""
+    """High-level EtherCAT Master with CoE and Multi-Axis Telemetry capabilities."""
 
     def __init__(self, raw_master: Optional[RawEthercatMaster] = None):
         self.raw = raw_master or RawEthercatMaster()
@@ -51,26 +51,33 @@ class EthercatMaster:
         self._pdo_thread = None
         self._sdo_lock = threading.Lock()
         
-        # State tracking for smooth velocity calculation (16-bit encoder = 65,536 inc/rev)
-        self._last_pos = None
-        self._last_pos_time = None
+        # Multi-Axis State Tracking
+        self._last_pos_by_addr: Dict[int, int] = {}
+        self._last_pos_time_by_addr: Dict[int, float] = {}
         self._diag_poll_cnt = 0
         
-        # Real Live Telemetry Object
-        self.live_telemetry = MotorTelemetry(
-            position_actual=0,
-            velocity_actual=0,
-            torque_actual=0,
-            dc_bus_voltage_mv=0,
-            temperature_c=25.0,
-            sto_code=0,
-            sto_active=False,
-            cia_state=Cia402State.SWITCH_ON_DISABLED,
-            led_ctrl_dword=0
-        )
+        # Telemetry Dictionary keyed by station address (0x1000, 0x1001, ...)
+        self.telemetry_by_addr: Dict[int, MotorTelemetry] = {
+            0x1000: MotorTelemetry(position_actual=0, velocity_actual=0, torque_actual=0, dc_bus_voltage_mv=0, temperature_c=25.0, sto_code=0, sto_active=False, cia_state=Cia402State.SWITCH_ON_DISABLED, led_ctrl_dword=0),
+            0x1001: MotorTelemetry(position_actual=0, velocity_actual=0, torque_actual=0, dc_bus_voltage_mv=0, temperature_c=25.0, sto_code=0, sto_active=False, cia_state=Cia402State.SWITCH_ON_DISABLED, led_ctrl_dword=0)
+        }
+        self._default_telemetry = self.telemetry_by_addr[0x1000]
         
-        self.on_telemetry: Optional[Callable[[MotorTelemetry], None]] = None
+        self.on_telemetry: Optional[Callable[[Dict[int, MotorTelemetry]], None]] = None
         self.on_log: Optional[Callable[[str], None]] = None
+
+    @property
+    def live_telemetry(self) -> MotorTelemetry:
+        """Returns telemetry for default primary motor (0x1000) for backward compatibility."""
+        return self.get_telemetry(0x1000)
+
+    def get_telemetry(self, station_addr: int = 0x1000) -> MotorTelemetry:
+        """Returns telemetry for any specific slave station address."""
+        if station_addr in self.telemetry_by_addr:
+            return self.telemetry_by_addr[station_addr]
+        if self.telemetry_by_addr:
+            return next(iter(self.telemetry_by_addr.values()))
+        return self._default_telemetry
 
     def log(self, msg: str):
         if self.on_log:
@@ -144,6 +151,16 @@ class EthercatMaster:
                 mailbox=mbx
             )
             slaves_found.append(slave)
+            
+            # Ensure telemetry packet exists for this slave
+            if cfg_addr not in self.telemetry_by_addr:
+                self.telemetry_by_addr[cfg_addr] = MotorTelemetry(
+                    position_actual=0, velocity_actual=0, torque_actual=0,
+                    dc_bus_voltage_mv=0, temperature_c=25.0, sto_code=0,
+                    sto_active=False, cia_state=Cia402State.SWITCH_ON_DISABLED,
+                    led_ctrl_dword=0
+                )
+            
             self.log(f"  Slave #{pos}: Station 0x{cfg_addr:04X}, State={AL_STATE_NAMES.get(al_state, 'UNKNOWN')} (0x{al_state:02X})")
 
         self.slaves = slaves_found
@@ -276,7 +293,7 @@ class EthercatMaster:
         self._pdo_running = True
         self._pdo_thread = threading.Thread(target=self._pdo_loop, daemon=True)
         self._pdo_thread.start()
-        self.log("Live telemetry polling active.")
+        self.log("Live multi-axis telemetry polling active.")
 
     def stop_cyclic_pdo(self):
         self._pdo_running = False
@@ -285,62 +302,73 @@ class EthercatMaster:
             self._pdo_thread = None
 
     def _pdo_loop(self):
-        """Continuous live telemetry stream with 16-bit encoder tracking, DC Bus voltage, and STO/Status diagnostics."""
+        """Continuous live multi-axis telemetry stream across all discovered EtherCAT slaves."""
         while self._pdo_running and self.is_connected and self.slaves:
-            addr = self.slaves[0].configured_addr
             now = time.time()
             self._diag_poll_cnt += 1
             
-            # 1. Primary: Poll Position 0x6064:00 every cycle (~25 Hz)
-            data, err = self.sdo_upload(addr, 0x6064, 0x00, timeout_s=0.08)
-            if data and len(data) >= 4:
-                pos = struct.unpack('<i', data[:4])[0]
-                self.live_telemetry.position_actual = pos
+            for s in self.slaves:
+                addr = s.configured_addr
+                if addr not in self.telemetry_by_addr:
+                    self.telemetry_by_addr[addr] = MotorTelemetry(
+                        position_actual=0, velocity_actual=0, torque_actual=0,
+                        dc_bus_voltage_mv=0, temperature_c=25.0, sto_code=0,
+                        sto_active=False, cia_state=Cia402State.SWITCH_ON_DISABLED,
+                        led_ctrl_dword=0
+                    )
+                t = self.telemetry_by_addr[addr]
                 
-                # Calculate real mechanical RPM from 16-bit encoder delta (65,536 inc = 1 rev)
-                if self._last_pos is not None and self._last_pos_time is not None:
-                    dt = now - self._last_pos_time
-                    if dt > 0.01:
-                        dpos = pos - self._last_pos
-                        rpm = (dpos / 65536.0) * (60.0 / dt)
-                        self.live_telemetry.velocity_actual = int(round(rpm))
-                
-                self._last_pos = pos
-                self._last_pos_time = now
+                # 1. Primary: Poll Position 0x6064:00 every cycle
+                data, err = self.sdo_upload(addr, 0x6064, 0x00, timeout_s=0.06)
+                if data and len(data) >= 4:
+                    pos = struct.unpack('<i', data[:4])[0]
+                    t.position_actual = pos
+                    
+                    last_p = self._last_pos_by_addr.get(addr)
+                    last_t = self._last_pos_time_by_addr.get(addr)
+                    if last_p is not None and last_t is not None:
+                        dt = now - last_t
+                        if dt > 0.01:
+                            dpos = pos - last_p
+                            rpm = (dpos / 65536.0) * (60.0 / dt)
+                            t.velocity_actual = int(round(rpm))
+                    
+                    self._last_pos_by_addr[addr] = pos
+                    self._last_pos_time_by_addr[addr] = now
 
-            # 2. Interleaved: Poll Statusword (0x6041:00) every 4 cycles (~160ms)
-            if self._diag_poll_cnt % 4 == 0:
-                sw_data, _ = self.sdo_upload(addr, 0x6041, 0x00, timeout_s=0.08)
-                if sw_data and len(sw_data) >= 2:
-                    sw = struct.unpack('<H', sw_data[:2])[0]
-                    self.live_telemetry.statusword = sw
-                    self.live_telemetry.cia_state = decode_cia402_state(sw)
+                # 2. Interleaved: Poll Statusword (0x6041:00)
+                if self._diag_poll_cnt % 4 == 0:
+                    sw_data, _ = self.sdo_upload(addr, 0x6041, 0x00, timeout_s=0.06)
+                    if sw_data and len(sw_data) >= 2:
+                        sw = struct.unpack('<H', sw_data[:2])[0]
+                        t.statusword = sw
+                        t.cia_state = decode_cia402_state(sw)
 
-            # 3. Interleaved: Poll DC Bus Voltage (0x6079:00) every 8 cycles (~320ms)
-            if self._diag_poll_cnt % 8 == 0:
-                bus_data, _ = self.sdo_upload(addr, 0x6079, 0x00, timeout_s=0.08)
-                if bus_data and len(bus_data) >= 4:
-                    self.live_telemetry.dc_bus_voltage_mv = struct.unpack('<I', bus_data[:4])[0]
+                # 3. Interleaved: Poll DC Bus Voltage (0x6079:00)
+                if self._diag_poll_cnt % 8 == 0:
+                    bus_data, _ = self.sdo_upload(addr, 0x6079, 0x00, timeout_s=0.06)
+                    if bus_data and len(bus_data) >= 4:
+                        t.dc_bus_voltage_mv = struct.unpack('<I', bus_data[:4])[0]
 
-            # 4. Interleaved: Poll STO Status (0x60F7:11) every 10 cycles (~400ms)
-            if self._diag_poll_cnt % 10 == 0:
-                sto_data, _ = self.sdo_upload(addr, 0x60F7, 0x11, timeout_s=0.08)
-                if sto_data:
-                    sto_val = int.from_bytes(sto_data[:2], 'little')
-                    self.live_telemetry.sto_code = sto_val
-                    self.live_telemetry.sto_info = decode_sto_status(sto_val)
-                    self.live_telemetry.sto_active = self.live_telemetry.sto_info.is_fault or (sto_val != 0)
+                # 4. Interleaved: Poll STO Status (0x60F7:11)
+                if self._diag_poll_cnt % 10 == 0:
+                    sto_data, _ = self.sdo_upload(addr, 0x60F7, 0x11, timeout_s=0.06)
+                    if sto_data:
+                        sto_val = int.from_bytes(sto_data[:2], 'little')
+                        t.sto_code = sto_val
+                        t.sto_info = decode_sto_status(sto_val)
+                        t.sto_active = t.sto_info.is_fault or (sto_val != 0)
 
-            # 5. Interleaved: Poll Internal Temperature (0x60F7:12) every 16 cycles (~640ms)
-            if self._diag_poll_cnt % 16 == 0:
-                tmp_data, _ = self.sdo_upload(addr, 0x60F7, 0x12, timeout_s=0.08)
-                if tmp_data:
-                    self.live_telemetry.temperature_c = float(int.from_bytes(tmp_data[:2], 'little'))
+                # 5. Interleaved: Poll Internal Temperature (0x60F7:12)
+                if self._diag_poll_cnt % 16 == 0:
+                    tmp_data, _ = self.sdo_upload(addr, 0x60F7, 0x12, timeout_s=0.06)
+                    if tmp_data:
+                        t.temperature_c = float(int.from_bytes(tmp_data[:2], 'little'))
 
-            # 6. Interleaved: Poll Actual Torque (0x6077:00) every 6 cycles (~240ms)
-            if self._diag_poll_cnt % 6 == 0:
-                tq_data, _ = self.sdo_upload(addr, 0x6077, 0x00, timeout_s=0.08)
-                if tq_data and len(tq_data) >= 2:
-                    self.live_telemetry.torque_actual = struct.unpack('<h', tq_data[:2])[0]
+                # 6. Interleaved: Poll Actual Torque (0x6077:00)
+                if self._diag_poll_cnt % 6 == 0:
+                    tq_data, _ = self.sdo_upload(addr, 0x6077, 0x00, timeout_s=0.06)
+                    if tq_data and len(tq_data) >= 2:
+                        t.torque_actual = struct.unpack('<h', tq_data[:2])[0]
 
-            time.sleep(0.04)
+            time.sleep(0.03)

@@ -124,13 +124,20 @@ class MotorTelemetry:
             self.led_config = LedRingConfig.from_dword(self.led_ctrl_dword)
 
     @property
+    def mode_of_operation(self) -> int:
+        return self.mode_display
+
+    @property
     def dc_bus_voltage_v(self) -> float:
         return self.dc_bus_voltage_mv / 1000.0
 
     @property
     def velocity_rpm(self) -> float:
-        # Assuming 1 rev = 10,000 counts (or direct RPM depending on scaling)
         return float(self.velocity_actual)
+
+    @property
+    def torque_percent(self) -> float:
+        return self.torque_actual / 10.0
 
 def decode_cia402_state(statusword: int) -> Cia402State:
     """Decodes CiA 402 state from 16-bit Statusword."""
