@@ -440,18 +440,22 @@ class MotionTab(tk.Frame):
 
         accel = int(self.var_accel.get())
         decel = int(self.var_decel.get())
+        targets = self._get_target_addresses()
 
-        for addr, mult in self._get_target_addresses():
+        # Phase 1: Pre-load acceleration and target velocity for ALL target axes
+        for addr, mult in targets:
             directed_rpm = val * mult
             vel_inc_s = int(round(directed_rpm * ENCODER_COUNTS_PER_REV / 60.0))
-            
             self.app.sdo_write_slave(addr, 0x6060, 0x00, (3).to_bytes(1, 'little', signed=True))
             self.app.sdo_write_slave(addr, 0x6083, 0x00, accel.to_bytes(4, 'little'))
             self.app.sdo_write_slave(addr, 0x6084, 0x00, decel.to_bytes(4, 'little'))
             self.app.sdo_write_slave(addr, 0x60FF, 0x00, vel_inc_s.to_bytes(4, 'little', signed=True))
+
+        # Phase 2: Instant synchronized command dispatch
+        for addr, _ in targets:
             self.app.send_controlword_slave(addr, CMD_ENABLE_OPERATION)
 
-        self.app.log(f"Commanded Velocity: {val:.1f} RPM to target {self.var_target_axis.get().upper()}")
+        self.app.log(f"Commanded Velocity: {val:.1f} RPM simultaneously to target {self.var_target_axis.get().upper()}")
 
     def _apply_position(self):
         self._require_safety_acknowledgment(self._do_apply_position)
@@ -472,24 +476,26 @@ class MotionTab(tk.Frame):
         vel_inc_s = int(round(rpm * ENCODER_COUNTS_PER_REV / 60.0))
         accel = int(self.var_accel.get())
         decel = int(self.var_decel.get())
-
         cw_cmd = 0x007F if is_rel else 0x003F
+        targets = self._get_target_addresses()
 
-        for addr, mult in self._get_target_addresses():
+        # Phase 1: Pre-load Mode 1, Velocity, Accel & Target Position into ALL axes
+        for addr, mult in targets:
             directed_pos = int(round(pos * mult)) if is_rel else pos
             self.app.sdo_write_slave(addr, 0x6060, 0x00, (1).to_bytes(1, 'little', signed=True))
             self.app.sdo_write_slave(addr, 0x6081, 0x00, vel_inc_s.to_bytes(4, 'little'))
             self.app.sdo_write_slave(addr, 0x6083, 0x00, accel.to_bytes(4, 'little'))
             self.app.sdo_write_slave(addr, 0x6084, 0x00, decel.to_bytes(4, 'little'))
             self.app.sdo_write_slave(addr, 0x607A, 0x00, int(directed_pos).to_bytes(4, 'little', signed=True))
-            
-            # Pulse setpoint
+            # Reset Bit 4 to low
             self.app.send_controlword_slave(addr, 0x000F)
-            time.sleep(0.01)
+
+        # Phase 2: Instant synchronized rising edge trigger across all axes simultaneously
+        for addr, _ in targets:
             self.app.send_controlword_slave(addr, cw_cmd)
 
         mode_tag = "RELATIVE" if is_rel else "ABSOLUTE"
-        self.app.log(f"Multi-Axis Position Move Dispatched ({mode_tag}): Target={pos:,d} @ {rpm} RPM to {self.var_target_axis.get().upper()}")
+        self.app.log(f"Multi-Axis Position Move Dispatched ({mode_tag}): Target={pos:,d} @ {rpm} RPM simultaneously to {self.var_target_axis.get().upper()}")
 
     def _rel_move(self, delta: int):
         self._require_safety_acknowledgment(lambda: self._do_rel_move(delta))
@@ -549,8 +555,9 @@ class MotionTab(tk.Frame):
             self._set_routine_ui_state(True, "⚡ 0→4000 RPM Tachometer Ramp", "Accelerating to 4,000 RPM...")
             
             try:
+                targets = self._get_target_addresses()
                 # 1. Enable Target Axes in Velocity Mode (3)
-                for addr, _ in self._get_target_addresses():
+                for addr, _ in targets:
                     self.app.sdo_write_slave(addr, 0x6060, 0x00, (3).to_bytes(1, 'little', signed=True))
                     self.app.send_controlword_slave(addr, CMD_ENABLE_OPERATION)
                     self.app.sdo_write_slave(addr, 0x2FEF, 0x01, (0x800B000D).to_bytes(4, 'little'))
@@ -561,7 +568,7 @@ class MotionTab(tk.Frame):
                     if self._routine_stop_event.is_set():
                         break
                     speed = (i / float(total_steps)) * 4000.0
-                    for addr, mult in self._get_target_addresses():
+                    for addr, mult in targets:
                         vel_inc = int(round(speed * mult * ENCODER_COUNTS_PER_REV / 60.0))
                         self.app.sdo_write_slave(addr, 0x60FF, 0x00, vel_inc.to_bytes(4, 'little', signed=True))
                     
@@ -577,7 +584,7 @@ class MotionTab(tk.Frame):
                     if self._routine_stop_event.is_set():
                         break
                     speed = (i / float(total_steps)) * 4000.0
-                    for addr, mult in self._get_target_addresses():
+                    for addr, mult in targets:
                         vel_inc = int(round(speed * mult * ENCODER_COUNTS_PER_REV / 60.0))
                         self.app.sdo_write_slave(addr, 0x60FF, 0x00, vel_inc.to_bytes(4, 'little', signed=True))
                     
@@ -587,7 +594,7 @@ class MotionTab(tk.Frame):
                     time.sleep(0.08)
 
                 # Complete
-                for addr, _ in self._get_target_addresses():
+                for addr, _ in targets:
                     self.app.sdo_write_slave(addr, 0x60FF, 0x00, (0).to_bytes(4, 'little', signed=True))
                     self.app.sdo_write_slave(addr, 0x2FEF, 0x01, (0x80010001).to_bytes(4, 'little'))
                 
@@ -615,9 +622,10 @@ class MotionTab(tk.Frame):
             self._set_routine_ui_state(True, name, "Initializing target axes...")
             
             try:
+                targets = self._get_target_addresses()
                 # 1. Enable target drives in Mode 1
                 vel_inc_s = int(round(target_rpm * ENCODER_COUNTS_PER_REV / 60.0))
-                for addr, _ in self._get_target_addresses():
+                for addr, _ in targets:
                     self.app.sdo_write_slave(addr, 0x6060, 0x00, (1).to_bytes(1, 'little', signed=True))
                     self.app.sdo_write_slave(addr, 0x6081, 0x00, vel_inc_s.to_bytes(4, 'little'))
                     self.app.sdo_write_slave(addr, 0x6083, 0x00, accel.to_bytes(4, 'little'))
@@ -635,14 +643,18 @@ class MotionTab(tk.Frame):
                     self.var_routine_step.set(f"Step {idx}/{total_steps}: {label} @ {target_rpm} RPM")
                     self.app.log(f"[{name}] Step {idx}/{total_steps}: {label}")
 
-                    for addr, mult in self._get_target_addresses():
+                    # Phase 1: Preload target position & optical LED configuration for ALL target axes
+                    for addr, mult in targets:
                         if led_dword:
                             self.app.sdo_write_slave(addr, 0x2FEF, 0x01, led_dword.to_bytes(4, 'little'))
                         
                         inc_delta = int(round(rev_delta * mult * ENCODER_COUNTS_PER_REV))
                         self.app.sdo_write_slave(addr, 0x607A, 0x00, inc_delta.to_bytes(4, 'little', signed=True))
+                        # Reset bit 4 low
                         self.app.send_controlword_slave(addr, 0x000F)
-                        time.sleep(0.008)
+
+                    # Phase 2: Simultaneous rising-edge trigger across ALL target drives back-to-back
+                    for addr, _ in targets:
                         self.app.send_controlword_slave(addr, 0x007F)
 
                     move_time_s = (abs(rev_delta) / (target_rpm / 60.0)) + 0.12
@@ -655,7 +667,7 @@ class MotionTab(tk.Frame):
                     if dwell_s > 0:
                         time.sleep(dwell_s)
 
-                for addr, _ in self._get_target_addresses():
+                for addr, _ in targets:
                     self.app.send_controlword_slave(addr, CMD_ENABLE_OPERATION)
                     self.app.sdo_write_slave(addr, 0x2FEF, 0x01, (0x80010001).to_bytes(4, 'little'))
 
