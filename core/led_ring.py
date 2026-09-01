@@ -215,10 +215,45 @@ class LedRingConfig:
             self.get_right_state().active_color(t_sec)
         )
 
+# Optical Direction Patterns (0x2FEF:01)
+LED_CW_GREEN_CHASE   = 0x800000DB  # Clockwise rotating chaser (Green: Left 0xB -> Right 0xD)
+LED_CCW_GREEN_CHASE  = 0x800000BD  # Counter-Clockwise rotating chaser (Green: Right 0xB -> Left 0xD)
+LED_CW_AMBER_CHASE   = 0x8000DB00  # Clockwise rotating chaser (Amber: Left 0xB -> Right 0xD)
+LED_CCW_AMBER_CHASE  = 0x8000BD00  # Counter-Clockwise rotating chaser (Amber: Right 0xB -> Left 0xD)
+LED_CW_GREEN_RIGHT   = 0x80000010  # CW Direction Half-Ring Indicator (Right Solid Green)
+LED_CCW_AMBER_LEFT   = 0x80000100  # CCW Direction Half-Ring Indicator (Left Solid Amber)
+LED_STANDBY_GREEN    = 0x80000011  # Standby / Stopped Solid Green
+LED_STANDBY_PULSE    = 0x80000044  # Standby / Stopped Gentle 1 Hz Pulse
+LED_FAULT_RED        = 0x80110000  # Fault / E-Stop Solid Red
+
+def get_direction_led_dword(direction_sign: float, color: str = "green", chaser: bool = True) -> int:
+    """
+    Returns 32-bit LED_CTRL DWORD that optically indicates physical motion direction.
+      - direction_sign > 0: Clockwise / Forward rotation
+      - direction_sign < 0: Counter-Clockwise / Reverse rotation
+      - direction_sign == 0: Standby / Idle (Solid Green)
+    """
+    if direction_sign > 0:
+        if chaser:
+            return LED_CW_GREEN_CHASE if color == "green" else LED_CW_AMBER_CHASE
+        else:
+            return LED_CW_GREEN_RIGHT
+    elif direction_sign < 0:
+        if chaser:
+            return LED_CCW_GREEN_CHASE if color == "green" else LED_CCW_AMBER_CHASE
+        else:
+            return LED_CCW_AMBER_LEFT
+    else:
+        return LED_STANDBY_GREEN
+
 # Standard Presets
 RING_PRESETS: Dict[str, LedRingConfig] = {
     "Auto Driver Mode (Firmware Controlled)": LedRingConfig(user_mode=False, name="Auto Driver Mode (Firmware Controlled)"),
     "Solid Green (Normal Operation)": LedRingConfig(user_mode=True, green_left=0x1, green_right=0x1, name="Solid Green (Normal Operation)"),
+    "CW Motion (Green Chaser Left→Right)": LedRingConfig.from_dword(LED_CW_GREEN_CHASE),
+    "CCW Motion (Green Chaser Right→Left)": LedRingConfig.from_dword(LED_CCW_GREEN_CHASE),
+    "CW Motion (Amber Chaser Left→Right)": LedRingConfig.from_dword(LED_CW_AMBER_CHASE),
+    "CCW Motion (Amber Chaser Right→Left)": LedRingConfig.from_dword(LED_CCW_AMBER_CHASE),
     "Green Pulse 1 Hz (Ready / Standby)": LedRingConfig(user_mode=True, green_left=0x4, green_right=0x4, name="Green Pulse 1 Hz (Ready / Standby)"),
     "Solid Yellow (Warning / Setup)": LedRingConfig(user_mode=True, yellow_left=0x1, yellow_right=0x1, name="Solid Yellow (Warning / Setup)"),
     "Yellow Flash 1 Hz (Caution Notice)": LedRingConfig(user_mode=True, yellow_left=0x8, yellow_right=0x8, name="Yellow Flash 1 Hz (Caution Notice)"),
@@ -231,3 +266,4 @@ RING_PRESETS: Dict[str, LedRingConfig] = {
     "Fast Strobe White/Mixed (Identification)": LedRingConfig(user_mode=True, green_left=0xF, green_right=0xF, yellow_left=0xF, yellow_right=0xF, name="Fast Strobe White/Mixed (Identification)"),
     "All Dark / LED Off": LedRingConfig(user_mode=True, name="All Dark / LED Off")
 }
+

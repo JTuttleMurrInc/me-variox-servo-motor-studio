@@ -21,7 +21,12 @@ from core.motor_device import (
     CMD_SHUTDOWN, CMD_SWITCH_ON, CMD_ENABLE_OPERATION, CMD_DISABLE_VOLTAGE,
     CMD_QUICK_STOP, CMD_FAULT_RESET
 )
-from core.led_ring import LedRingConfig, RING_PRESETS
+from core.led_ring import (
+    LedRingConfig, RING_PRESETS, get_direction_led_dword,
+    LED_CW_GREEN_CHASE, LED_CCW_GREEN_CHASE,
+    LED_CW_AMBER_CHASE, LED_CCW_AMBER_CHASE,
+    LED_STANDBY_GREEN
+)
 from gui.components.safety_modal import MotionSafetyModal
 from gui.theme import (
     COLOR_BG_DARK, COLOR_BG_SURFACE, COLOR_BG_CARD, COLOR_BG_INPUT, COLOR_BG_ACCENT,
@@ -448,6 +453,10 @@ class MotionTab(tk.Frame):
             directed_rpm = val * mult
             vel_inc_s = int(round(directed_rpm * ENCODER_COUNTS_PER_REV / 60.0))
             
+            # Optical Direction Lighting on physical motor ring
+            dir_led = get_direction_led_dword(directed_rpm)
+            self.app.sdo_write_slave(addr, 0x2FEF, 0x01, dir_led.to_bytes(4, 'little'))
+
             self.app.sdo_write_slave(addr, 0x6060, 0x00, (3).to_bytes(1, 'little', signed=True))
             self.app.sdo_write_slave(addr, 0x6083, 0x00, accel.to_bytes(4, 'little'))
             self.app.sdo_write_slave(addr, 0x6084, 0x00, decel.to_bytes(4, 'little'))
@@ -480,6 +489,12 @@ class MotionTab(tk.Frame):
 
         for addr, mult in self._get_target_addresses():
             directed_pos = int(round(pos * mult)) if is_rel else pos
+            
+            # Optical Direction Lighting on physical motor ring
+            dir_sign = float(pos * mult) if is_rel else float(directed_pos)
+            dir_led = get_direction_led_dword(dir_sign)
+            self.app.sdo_write_slave(addr, 0x2FEF, 0x01, dir_led.to_bytes(4, 'little'))
+
             self.app.sdo_write_slave(addr, 0x6060, 0x00, (1).to_bytes(1, 'little', signed=True))
             self.app.sdo_write_slave(addr, 0x6081, 0x00, vel_inc_s.to_bytes(4, 'little'))
             self.app.sdo_write_slave(addr, 0x6083, 0x00, accel.to_bytes(4, 'little'))
@@ -514,27 +529,27 @@ class MotionTab(tk.Frame):
             return
 
         steps = [
-            (4.0, "+4.0 Revolutions Forward (CW)", 0x80080004),
-            (-4.0, "-4.0 Revolutions Reverse (CCW)", 0x80080006),
-            (2.0, "+2.0 Revolutions Forward (CW)", 0x80080004),
-            (-2.0, "-2.0 Revolutions Reverse (CCW)", 0x80080006),
-            (1.0, "+1.0 Revolution Forward (CW)", 0x80080004),
-            (-1.0, "-1.0 Revolution Reverse (CCW)", 0x80080006),
-            (0.5, "+0.50 Revolution Forward (CW)", 0x80080004),
-            (-0.5, "-0.50 Revolution Reverse (CCW)", 0x80080006),
-            (0.25, "+0.25 Revolution Forward (CW)", 0x80080004),
-            (-0.25, "-0.25 Revolution Reverse (CCW)", 0x80080006),
+            (4.0, "+4.0 Revolutions Forward (CW)", LED_CW_GREEN_CHASE),
+            (-4.0, "-4.0 Revolutions Reverse (CCW)", LED_CCW_AMBER_CHASE),
+            (2.0, "+2.0 Revolutions Forward (CW)", LED_CW_GREEN_CHASE),
+            (-2.0, "-2.0 Revolutions Reverse (CCW)", LED_CCW_AMBER_CHASE),
+            (1.0, "+1.0 Revolution Forward (CW)", LED_CW_GREEN_CHASE),
+            (-1.0, "-1.0 Revolution Reverse (CCW)", LED_CCW_AMBER_CHASE),
+            (0.5, "+0.50 Revolution Forward (CW)", LED_CW_GREEN_CHASE),
+            (-0.5, "-0.50 Revolution Reverse (CCW)", LED_CCW_AMBER_CHASE),
+            (0.25, "+0.25 Revolution Forward (CW)", LED_CW_GREEN_CHASE),
+            (-0.25, "-0.25 Revolution Reverse (CCW)", LED_CCW_AMBER_CHASE),
             
-            (-0.25, "-0.25 Revolution Reverse (CCW)", 0x80080006),
-            (0.25, "+0.25 Revolution Forward (CW)", 0x80080004),
-            (-0.5, "-0.50 Revolution Reverse (CCW)", 0x80080006),
-            (0.5, "+0.50 Revolution Forward (CW)", 0x80080004),
-            (-1.0, "-1.0 Revolution Reverse (CCW)", 0x80080006),
-            (1.0, "+1.0 Revolution Forward (CW)", 0x80080004),
-            (-2.0, "-2.0 Revolutions Reverse (CCW)", 0x80080006),
-            (2.0, "+2.0 Revolutions Forward (CW)", 0x80080004),
-            (-4.0, "-4.0 Revolutions Reverse (CCW)", 0x80080006),
-            (4.0, "+4.0 Revolutions Forward (CW)", 0x80080004),
+            (-0.25, "-0.25 Revolution Reverse (CCW)", LED_CCW_AMBER_CHASE),
+            (0.25, "+0.25 Revolution Forward (CW)", LED_CW_GREEN_CHASE),
+            (-0.5, "-0.50 Revolution Reverse (CCW)", LED_CCW_AMBER_CHASE),
+            (0.5, "+0.50 Revolution Forward (CW)", LED_CW_GREEN_CHASE),
+            (-1.0, "-1.0 Revolution Reverse (CCW)", LED_CCW_AMBER_CHASE),
+            (1.0, "+1.0 Revolution Forward (CW)", LED_CW_GREEN_CHASE),
+            (-2.0, "-2.0 Revolutions Reverse (CCW)", LED_CCW_AMBER_CHASE),
+            (2.0, "+2.0 Revolutions Forward (CW)", LED_CW_GREEN_CHASE),
+            (-4.0, "-4.0 Revolutions Reverse (CCW)", LED_CCW_AMBER_CHASE),
+            (4.0, "+4.0 Revolutions Forward (CW)", LED_CW_GREEN_CHASE),
         ]
 
         self._start_routine_thread("🌀 Harmonic Reversing Sweep (4000 RPM)", steps, target_rpm=4000, accel=250000)
@@ -554,10 +569,10 @@ class MotionTab(tk.Frame):
             try:
                 targets = self._get_target_addresses()
                 # 1. Enable Target Axes in Velocity Mode (3)
-                for addr, _ in targets:
+                for addr, mult in targets:
                     self.app.sdo_write_slave(addr, 0x6060, 0x00, (3).to_bytes(1, 'little', signed=True))
                     self.app.send_controlword_slave(addr, CMD_ENABLE_OPERATION)
-                    self.app.sdo_write_slave(addr, 0x2FEF, 0x01, (0x800B000D).to_bytes(4, 'little'))
+                    self.app.sdo_write_slave(addr, 0x2FEF, 0x01, (LED_CW_GREEN_CHASE if mult > 0 else LED_CCW_AMBER_CHASE).to_bytes(4, 'little'))
                 
                 # Ramp up
                 total_steps = 40
@@ -593,7 +608,7 @@ class MotionTab(tk.Frame):
                 # Complete
                 for addr, _ in targets:
                     self.app.sdo_write_slave(addr, 0x60FF, 0x00, (0).to_bytes(4, 'little', signed=True))
-                    self.app.sdo_write_slave(addr, 0x2FEF, 0x01, (0x80010001).to_bytes(4, 'little'))
+                    self.app.sdo_write_slave(addr, 0x2FEF, 0x01, (LED_STANDBY_GREEN).to_bytes(4, 'little'))
                 
                 self.var_routine_step.set("Tachometer sweep completed successfully.")
                 self.app.log("Completed Tachometer Sweep Routine.")
@@ -605,79 +620,79 @@ class MotionTab(tk.Frame):
 
     def start_turntable_routine(self):
         steps = [
-            (0.25, "Indexing Station 1 (0° → 90°)", 0x80080004),
-            (0.25, "Indexing Station 2 (90° → 180°)", 0x80080004),
-            (0.25, "Indexing Station 3 (180° → 270°)", 0x80080004),
-            (0.25, "Indexing Station 4 (270° → 360° / Home)", 0x80080002),
+            (0.25, "Indexing Station 1 (0° → 90° CW)", LED_CW_GREEN_CHASE),
+            (0.25, "Indexing Station 2 (90° → 180° CW)", LED_CW_GREEN_CHASE),
+            (0.25, "Indexing Station 3 (180° → 270° CW)", LED_CW_GREEN_CHASE),
+            (0.25, "Indexing Station 4 (270° → 360° CW / Home)", LED_STANDBY_GREEN),
         ]
         self._require_safety_acknowledgment(lambda: self._start_routine_thread("🎡 4x90° Indexing Turntable (Dwell Carousel)", steps, target_rpm=1500, accel=180000, dwell_s=0.08))
 
     def start_pick_and_place_routine(self):
         steps = [
-            (2.0, "Traverse to Pick Station (+2.0 Rev)", 0x80080007),
-            (0.0, "Gripper Engage & Dwell (0.15s)", 0x800B0002),
-            (-4.0, "High-Speed Gantry Transfer to Place (-4.0 Rev)", 0x80080005),
-            (0.0, "Gripper Release & Place Dwell (0.15s)", 0x800B0002),
-            (2.0, "Return to Home Datum (+2.0 Rev)", 0x80080003),
+            (2.0, "Traverse to Pick Station (+2.0 Rev CW)", LED_CW_GREEN_CHASE),
+            (0.0, "Gripper Engage & Dwell (0.15s)", LED_STANDBY_GREEN),
+            (-4.0, "High-Speed Gantry Transfer to Place (-4.0 Rev CCW)", LED_CCW_AMBER_CHASE),
+            (0.0, "Gripper Release & Place Dwell (0.15s)", LED_STANDBY_GREEN),
+            (2.0, "Return to Home Datum (+2.0 Rev CW)", LED_CW_GREEN_CHASE),
             
-            (2.0, "Cycle 2: Traverse to Pick Station (+2.0 Rev)", 0x80080007),
-            (0.0, "Cycle 2: Gripper Engage & Dwell", 0x800B0002),
-            (-4.0, "Cycle 2: Transfer to Place (-4.0 Rev)", 0x80080005),
-            (0.0, "Cycle 2: Gripper Release & Dwell", 0x800B0002),
-            (2.0, "Cycle 2: Return to Home Datum (+2.0 Rev)", 0x80080003),
+            (2.0, "Cycle 2: Traverse to Pick Station (+2.0 Rev CW)", LED_CW_GREEN_CHASE),
+            (0.0, "Cycle 2: Gripper Engage & Dwell", LED_STANDBY_GREEN),
+            (-4.0, "Cycle 2: Transfer to Place (-4.0 Rev CCW)", LED_CCW_AMBER_CHASE),
+            (0.0, "Cycle 2: Gripper Release & Dwell", LED_STANDBY_GREEN),
+            (2.0, "Cycle 2: Return to Home Datum (+2.0 Rev CW)", LED_CW_GREEN_CHASE),
         ]
         self._require_safety_acknowledgment(lambda: self._start_routine_thread("📦 High-Speed Pick & Place Gantry", steps, target_rpm=3800, accel=240000, dwell_s=0.12))
 
     def start_flying_shear_routine(self):
         steps = [
-            (1.0, "Cycle 1: Infeed Sync Traverse (+1.0 Rev)", 0x80080003),
+            (1.0, "Cycle 1: Infeed Sync Traverse (+1.0 Rev CW)", LED_CW_GREEN_CHASE),
             (0.5, "Cycle 1: High-Speed Flying Cut (+0.5 Rev @ 4000 RPM)", 0x80040050),
-            (1.5, "Cycle 1: Outfeed Clear (+1.5 Rev)", 0x80080008),
+            (1.5, "Cycle 1: Outfeed Clear (+1.5 Rev CW)", LED_CW_GREEN_CHASE),
             
-            (1.0, "Cycle 2: Infeed Sync Traverse (+1.0 Rev)", 0x80080003),
+            (1.0, "Cycle 2: Infeed Sync Traverse (+1.0 Rev CW)", LED_CW_GREEN_CHASE),
             (0.5, "Cycle 2: High-Speed Flying Cut (+0.5 Rev @ 4000 RPM)", 0x80040050),
-            (1.5, "Cycle 2: Outfeed Clear (+1.5 Rev)", 0x80080008),
+            (1.5, "Cycle 2: Outfeed Clear (+1.5 Rev CW)", LED_CW_GREEN_CHASE),
 
-            (1.0, "Cycle 3: Infeed Sync Traverse (+1.0 Rev)", 0x80080003),
+            (1.0, "Cycle 3: Infeed Sync Traverse (+1.0 Rev CW)", LED_CW_GREEN_CHASE),
             (0.5, "Cycle 3: High-Speed Flying Cut (+0.5 Rev @ 4000 RPM)", 0x80040050),
-            (1.5, "Cycle 3: Outfeed Clear (+1.5 Rev)", 0x80080008),
+            (1.5, "Cycle 3: Outfeed Clear (+1.5 Rev CW)", LED_CW_GREEN_CHASE),
 
-            (1.0, "Cycle 4: Infeed Sync Traverse (+1.0 Rev)", 0x80080003),
+            (1.0, "Cycle 4: Infeed Sync Traverse (+1.0 Rev CW)", LED_CW_GREEN_CHASE),
             (0.5, "Cycle 4: High-Speed Flying Cut (+0.5 Rev @ 4000 RPM)", 0x80040050),
-            (1.5, "Cycle 4: Outfeed Clear (+1.5 Rev)", 0x80080008),
+            (1.5, "Cycle 4: Outfeed Clear (+1.5 Rev CW)", LED_CW_GREEN_CHASE),
         ]
         self._require_safety_acknowledgment(lambda: self._start_routine_thread("⚙️ Rotary Flying Knife (4000 RPM)", steps, target_rpm=4000, accel=280000, dwell_s=0.04))
 
     def start_micro_precision_routine(self):
         steps = [
-            (0.05, "Step 1: +18.0° Micro-Increment", 0x80080004),
-            (-0.05, "Step 2: -18.0° Micro-Return", 0x80080006),
-            (0.02, "Step 3: +7.20° Sub-Degree Position", 0x80080008),
-            (-0.02, "Step 4: -7.20° Sub-Degree Return", 0x80080008),
-            (0.005, "Step 5: +1.80° Precision Vernier Step", 0x80080001),
-            (-0.005, "Step 6: -1.80° Precision Vernier Return", 0x80080001),
+            (0.05, "Step 1: +18.0° Micro-Increment CW", LED_CW_GREEN_CHASE),
+            (-0.05, "Step 2: -18.0° Micro-Return CCW", LED_CCW_AMBER_CHASE),
+            (0.02, "Step 3: +7.20° Sub-Degree Position CW", LED_CW_GREEN_CHASE),
+            (-0.02, "Step 4: -7.20° Sub-Degree Return CCW", LED_CCW_AMBER_CHASE),
+            (0.005, "Step 5: +1.80° Precision Vernier Step CW", LED_CW_GREEN_CHASE),
+            (-0.005, "Step 6: -1.80° Precision Vernier Return CCW", LED_CCW_AMBER_CHASE),
             
-            (0.01, "Stiffness Dither #1 (+3.6°)", 0x800B000D),
-            (-0.01, "Stiffness Dither #1 (-3.6°)", 0x800B000D),
-            (0.01, "Stiffness Dither #2 (+3.6°)", 0x800B000D),
-            (-0.01, "Stiffness Dither #2 (-3.6°)", 0x800B000D),
-            (0.01, "Stiffness Dither #3 (+3.6°)", 0x800B000D),
-            (-0.01, "Stiffness Dither #3 (-3.6°)", 0x800B000D),
-            (0.01, "Stiffness Dither #4 (+3.6°)", 0x800B000D),
-            (-0.01, "Stiffness Dither #4 (-3.6°)", 0x800B000D),
+            (0.01, "Stiffness Dither #1 (+3.6° CW)", LED_CW_GREEN_CHASE),
+            (-0.01, "Stiffness Dither #1 (-3.6° CCW)", LED_CCW_AMBER_CHASE),
+            (0.01, "Stiffness Dither #2 (+3.6° CW)", LED_CW_GREEN_CHASE),
+            (-0.01, "Stiffness Dither #2 (-3.6° CCW)", LED_CCW_AMBER_CHASE),
+            (0.01, "Stiffness Dither #3 (+3.6° CW)", LED_CW_GREEN_CHASE),
+            (-0.01, "Stiffness Dither #3 (-3.6° CCW)", LED_CCW_AMBER_CHASE),
+            (0.01, "Stiffness Dither #4 (+3.6° CW)", LED_CW_GREEN_CHASE),
+            (-0.01, "Stiffness Dither #4 (-3.6° CCW)", LED_CCW_AMBER_CHASE),
         ]
         self._require_safety_acknowledgment(lambda: self._start_routine_thread("🎯 Micro-Stepping Stiffness Test", steps, target_rpm=2500, accel=300000, dwell_s=0.04))
 
     def start_dual_ballet_routine(self):
         steps = [
-            (3.0, "Dual Mirror Phase 1: Opposing Full 3-Turn (+3 / -3 Rev)", 0x80080004),
-            (-3.0, "Dual Mirror Phase 2: Opposing Reverse (-3 / +3 Rev)", 0x80080006),
-            (1.5, "Dual Mirror Phase 3: Synchronized 1.5-Turn Pirouette", 0x80080008),
-            (-1.5, "Dual Mirror Phase 4: Synchronized 1.5-Turn Counter", 0x80080005),
-            (0.75, "Dual Mirror Phase 5: Quick Alternating Strobe (+0.75 Rev)", 0x800B000D),
-            (-0.75, "Dual Mirror Phase 6: Quick Alternating Strobe (-0.75 Rev)", 0x800B000D),
+            (3.0, "Dual Mirror Phase 1: Opposing Full 3-Turn (+3 / -3 Rev)", LED_CW_GREEN_CHASE),
+            (-3.0, "Dual Mirror Phase 2: Opposing Reverse (-3 / +3 Rev)", LED_CCW_AMBER_CHASE),
+            (1.5, "Dual Mirror Phase 3: Synchronized 1.5-Turn Pirouette", LED_CW_GREEN_CHASE),
+            (-1.5, "Dual Mirror Phase 4: Synchronized 1.5-Turn Counter", LED_CCW_AMBER_CHASE),
+            (0.75, "Dual Mirror Phase 5: Quick Alternating Strobe (+0.75 Rev)", LED_CW_GREEN_CHASE),
+            (-0.75, "Dual Mirror Phase 6: Quick Alternating Strobe (-0.75 Rev)", LED_CCW_AMBER_CHASE),
             (3.0, "Grand Finale: 3-Turn High-Speed Synchrony (+3.0 Rev)", 0x80040050),
-            (-3.0, "Grand Finale: 3-Turn Return to Datum (-3.0 Rev)", 0x80080001),
+            (-3.0, "Grand Finale: 3-Turn Return to Datum (-3.0 Rev)", LED_STANDBY_GREEN),
         ]
         self._require_safety_acknowledgment(lambda: self._start_routine_thread("🪞 Mirrored Synchronous Ballet", steps, target_rpm=3500, accel=250000, dwell_s=0.06))
 
@@ -709,8 +724,17 @@ class MotionTab(tk.Frame):
                     self.app.log(f"[{name}] Step {idx}/{total_steps}: {label}")
 
                     for addr, mult in targets:
-                        if led_dword:
-                            self.app.sdo_write_slave(addr, 0x2FEF, 0x01, led_dword.to_bytes(4, 'little'))
+                        # Automatically adapt physical optical direction animation
+                        axis_delta = rev_delta * mult
+                        axis_led = led_dword
+                        if mult < 0:
+                            if axis_led == LED_CW_GREEN_CHASE:
+                                axis_led = LED_CCW_AMBER_CHASE
+                            elif axis_led == LED_CCW_AMBER_CHASE:
+                                axis_led = LED_CW_GREEN_CHASE
+
+                        if axis_led:
+                            self.app.sdo_write_slave(addr, 0x2FEF, 0x01, axis_led.to_bytes(4, 'little'))
                         
                         inc_delta = int(round(rev_delta * mult * ENCODER_COUNTS_PER_REV))
                         self.app.sdo_write_slave(addr, 0x607A, 0x00, inc_delta.to_bytes(4, 'little', signed=True))
@@ -730,7 +754,7 @@ class MotionTab(tk.Frame):
 
                 for addr, _ in targets:
                     self.app.send_controlword_slave(addr, CMD_ENABLE_OPERATION)
-                    self.app.sdo_write_slave(addr, 0x2FEF, 0x01, (0x80010001).to_bytes(4, 'little'))
+                    self.app.sdo_write_slave(addr, 0x2FEF, 0x01, (LED_STANDBY_GREEN).to_bytes(4, 'little'))
 
                 self.var_routine_step.set("Choreographed routine completed cleanly.")
                 self.app.log(f"Routine '{name}' completed successfully.")
