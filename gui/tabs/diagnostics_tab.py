@@ -216,6 +216,9 @@ class DiagnosticsTab(tk.Frame):
         else:
             self.app.log(f"Bus state transition to {state_name} timed out or failed.")
 
+    def refresh_slaves(self, slaves=None):
+        self.update_slave_list()
+
     def update_slave_list(self):
         for item in self.slave_tree.get_children():
             self.slave_tree.delete(item)
@@ -223,6 +226,9 @@ class DiagnosticsTab(tk.Frame):
         if self.app.is_simulation:
             self.slave_tree.insert("", "end", values=(
                 "0", "0x1000", "OP (0x08)", "0x000005D5", "0x00B85381", "0x1000 (128B)", "0x1400 (128B)"
+            ))
+            self.slave_tree.insert("", "end", values=(
+                "1", "0x1001", "OP (0x08)", "0x000005D5", "0x00B85381", "0x1000 (128B)", "0x1400 (128B)"
             ))
         else:
             for s in self.app.ecat_master.slaves:
