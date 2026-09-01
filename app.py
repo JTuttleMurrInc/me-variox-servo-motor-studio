@@ -9,6 +9,7 @@ import time
 import tkinter as tk
 from tkinter import ttk, messagebox
 from typing import Optional, Dict
+from PIL import Image, ImageTk
 
 from core.esi_parser import EsiParser
 from core.simulation import VirtualMotorDrive, VirtualMultiAxisDrive
@@ -136,7 +137,11 @@ class VarioXMotorStudioApp:
         logo_path = os.path.join(os.path.dirname(__file__), "assets", "murr_logo.png")
         if os.path.exists(logo_path):
             try:
-                self._logo_img = tk.PhotoImage(file=logo_path)
+                pil_img = Image.open(logo_path)
+                aspect = pil_img.width / float(pil_img.height)
+                new_w = int(28 * aspect)
+                resized = pil_img.resize((new_w, 28), Image.Resampling.LANCZOS)
+                self._logo_img = ImageTk.PhotoImage(resized)
                 lbl_logo = tk.Label(brand_frame, image=self._logo_img, bg=COLOR_BG_SURFACE)
                 lbl_logo.pack(side="left", padx=(0, 10))
             except Exception:
@@ -358,12 +363,13 @@ class VarioXMotorStudioApp:
         if not self.is_simulation and t1:
             self._log_tick_cnt += 1
             if self._log_tick_cnt % 15 == 0:
-                p1 = t1.position_actual
-                p2 = t2.position_actual if t2 else 0
-                v1 = t1.velocity_rpm
-                v2 = t2.velocity_rpm if t2 else 0
+                p1 = int(t1.position_actual)
+                p2 = int(t2.position_actual) if t2 else 0
+                v1 = int(t1.velocity_rpm)
+                v2 = int(t2.velocity_rpm) if t2 else 0
                 bus1 = t1.dc_bus_voltage_v
-                print(f"[{time.strftime('%H:%M:%S')}] [LIVE-DUAL] M1 (0x1000): {p1:>8,d} inc ({v1:>4d} RPM) | M2 (0x1001): {p2:>8,d} inc ({v2:>4d} RPM) | Bus: {bus1:.1f}V | State: {t1.cia_state.value}")
+                bus2 = t2.dc_bus_voltage_v if t2 else 0.0
+                print(f"[{time.strftime('%H:%M:%S')}] [LIVE-DUAL] M1 (0x1000): {p1:>8,d} inc ({v1:>4d} RPM | {bus1:.1f}V) | M2 (0x1001): {p2:>8,d} inc ({v2:>4d} RPM | {bus2:.1f}V) | State: {t1.cia_state.value}")
 
         # Update tabs
         self.tab_dashboard.update_multi_telemetry(t_dict)
