@@ -331,12 +331,13 @@ class VarioXMotorStudioApp:
 
         self.current_telemetry = t
 
-        # Log position change to terminal every ~500ms if changed
+        # Log status to terminal every ~500ms
         if not self.is_simulation:
             self._log_tick_cnt += 1
-            if self._log_tick_cnt % 15 == 0 and t.position_actual != self._last_pos_log:
+            if self._log_tick_cnt % 15 == 0:
                 self._last_pos_log = t.position_actual
-                print(f"[{time.strftime('%H:%M:%S')}] [LIVE-FEEDBACK] Pos: {t.position_actual:>10,d} inc | {t.position_actual/65536.0:>6.2f} rev | Speed: {t.velocity_rpm} RPM | Bus: {t.dc_bus_voltage_v:.1f}V | State: {t.cia_state.value}")
+                sto_str = "OK (A+B HIGH)" if not t.sto_active else ("TRIPPED" if not t.sto_info else t.sto_info.error_code_hex)
+                print(f"[{time.strftime('%H:%M:%S')}] [LIVE-FEEDBACK] Pos: {t.position_actual:>10,d} inc | {t.position_actual/65536.0:>6.2f} rev | Speed: {t.velocity_rpm} RPM | Bus: {t.dc_bus_voltage_v:.1f}V | STO: {sto_str} | State: {t.cia_state.value}")
 
         # Update tabs
         self.tab_dashboard.update_telemetry(t)
