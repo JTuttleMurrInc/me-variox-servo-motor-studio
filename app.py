@@ -103,6 +103,8 @@ class VarioXMotorStudioApp:
             ok = self.connect_hardware(adapter_name)
             if ok:
                 self.scan_slaves()
+                # Ensure motor starts in safe Shutdown state (0x0006)
+                self.send_controlword(CMD_SHUTDOWN)
                 # Start live cyclic telemetry polling
                 self.ecat_master.start_cyclic_pdo(0.04)
 

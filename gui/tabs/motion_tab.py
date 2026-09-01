@@ -306,7 +306,9 @@ class MotionTab(tk.Frame):
             self.safety_acknowledged = False
             self.lbl_safety_pill.config(text="🛡️ MOTION SAFETY INTERLOCK: LOCKED (Acknowledgment Required)", bg="#381014", fg=COLOR_DANGER)
             self.btn_safety_toggle.config(text="Arm / Acknowledge Safety Interlock")
-            self.app.log("Safety Interlock disarmed / locked.")
+            # Force motor into safe Shutdown (0x0006)
+            self.app.send_controlword(CMD_SHUTDOWN)
+            self.app.log("Safety Interlock locked. Motor placed in Shutdown (0x0006 / Ready to Switch On).")
         else:
             self._require_safety_acknowledgment(lambda: None)
 
@@ -510,11 +512,10 @@ class MotionTab(tk.Frame):
                 # 1. Enable Drive in Velocity Mode (3)
                 self.app.sdo_write(0x6060, 0x00, (3).to_bytes(1, 'little', signed=True))
                 self.app.send_controlword(CMD_ENABLE_OPERATION)
-                self.app.apply_led_config(RING_PRESETS["Velocity Gradient (Tachometer)"])
+                self.app.apply_led_config(RING_PRESETS["Rotating Chaser Simulation (Phase Shift B/D)"])
                 
                 # Ramp up
                 total_steps = 40
-                self.app.apply_led_config(RING_PRESETS["Rotating Chaser Simulation (Phase Shift B/D)"])
                 for i in range(total_steps + 1):
                     if self._routine_stop_event.is_set():
                         break
