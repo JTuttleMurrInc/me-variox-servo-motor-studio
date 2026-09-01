@@ -670,7 +670,11 @@ class MotionTab(tk.Frame):
                     # Phase 4: Instant simultaneous rising-edge trigger across ALL target drives in a SINGLE packet
                     self.app.send_controlwords_simultaneous({addr: 0x007F for addr, _ in targets})
 
-                    move_time_s = (abs(rev_delta) / (target_rpm / 60.0)) + 0.12
+                    # Calculate true kinematic trapezoidal move time (Accel + Cruise + Decel + Settling margin)
+                    accel_time_s = (target_rpm / 60.0) / max(0.1, (accel / float(ENCODER_COUNTS_PER_REV)))
+                    cruise_time_s = abs(rev_delta) / max(1.0, (target_rpm / 60.0))
+                    move_time_s = max(0.40, (2.0 * accel_time_s) + cruise_time_s + 0.18)
+
                     deadline = time.time() + move_time_s
                     while time.time() < deadline:
                         if self._routine_stop_event.is_set():
