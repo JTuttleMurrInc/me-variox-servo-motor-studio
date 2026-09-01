@@ -514,6 +514,7 @@ class MotionTab(tk.Frame):
                 
                 # Ramp up
                 total_steps = 40
+                self.app.apply_led_config(RING_PRESETS["Rotating Chaser Simulation (Phase Shift B/D)"])
                 for i in range(total_steps + 1):
                     if self._routine_stop_event.is_set():
                         break
@@ -544,7 +545,7 @@ class MotionTab(tk.Frame):
 
                 # Complete
                 self.app.sdo_write(0x60FF, 0x00, (0).to_bytes(4, 'little', signed=True))
-                self.app.apply_led_config(RING_PRESETS["Murr Lime Breathing Halo"])
+                self.app.apply_led_config(RING_PRESETS["Solid Green (Normal Operation)"])
                 self.var_routine_step.set("Tachometer sweep completed successfully.")
                 self.app.log("Completed Tachometer Sweep Routine.")
             finally:
@@ -621,7 +622,7 @@ class MotionTab(tk.Frame):
 
                 # Finalize
                 self.app.send_controlword(CMD_ENABLE_OPERATION)
-                self.app.apply_led_config(RING_PRESETS["Murr Lime Breathing Halo"])
+                self.app.apply_led_config(RING_PRESETS["Solid Green (Normal Operation)"])
                 self.var_routine_step.set("Choreographed routine completed cleanly.")
                 self.app.log(f"Routine '{name}' completed successfully.")
             finally:
