@@ -294,6 +294,12 @@ class VarioXMotorStudioApp:
                 self.ecat_master.live_telemetry.led_config = cfg
 
     def action_enable_drive(self):
+        if hasattr(self, 'tab_motion') and not self.tab_motion.safety_acknowledged:
+            self.tab_motion._require_safety_acknowledgment(self._do_enable_drive)
+        else:
+            self._do_enable_drive()
+
+    def _do_enable_drive(self):
         # 1. Pre-initialize Mode of Operation to Profile Velocity (Mode 3)
         self.sdo_write(0x6060, 0x00, (3).to_bytes(1, 'little', signed=True))
         # 2. Pre-initialize Profile Velocity, Accel & Decel
